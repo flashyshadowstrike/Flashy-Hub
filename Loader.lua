@@ -65,4 +65,3 @@ if not success then
 else
     print("[Flashy Loader] Successfully loaded " .. target)
 end
-end
