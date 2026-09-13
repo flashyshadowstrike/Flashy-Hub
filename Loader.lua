@@ -14,28 +14,28 @@ local GAME_MAP = {
     [9192423027] = "Industrialist.lua",
 }
 
-local placeId = game.PlaceId
+local gameId = game.GameId
 
 local MarketplaceService = game:GetService("MarketplaceService")
 
 local okInfo, info = pcall(function()
-    return MarketplaceService:GetProductInfo(placeId)
+    return MarketplaceService:GetProductInfo(gameId, Enum.InfoType.Game)
 end)
 
 local gameName = (okInfo and info and info.Name) or "Unknown Game"
-local target = GAME_MAP[placeId]
+local target = GAME_MAP[gameId]
 
 if not target then
     warn("[Flashy Loader] Game not supported!")
     warn("Game: " .. gameName)
-    warn("PlaceId: " .. tostring(placeId))
+    warn("GameId: " .. tostring(gameId))
     return
 end
 
 print(string.format(
-    "[Flashy Loader] Detected: %s (PlaceId %d)",
+    "[Flashy Loader] Detected: %s (GameId %d)",
     gameName,
-    placeId
+    gameId
 ))
 
 print("[Flashy Loader] Loading: " .. target)
@@ -57,7 +57,7 @@ if not success then
     warn("================================")
     warn("[Flashy Loader] LOAD FAILED")
     warn("Game: " .. gameName)
-    warn("PlaceId: " .. tostring(placeId))
+    warn("GameId: " .. tostring(gameId))
     warn("Script: " .. target)
     warn("URL: " .. url)
     warn("Error: " .. tostring(result))
