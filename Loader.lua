@@ -11,31 +11,31 @@ local BASE_URL = "https://raw.githubusercontent.com/flashyshadowstrike/Flashy-Hu
 
 local GAME_MAP = {
     [79268393072444] = "SellLemons.lua",
-    [9192423027] = "Industrialist.lua",
+    [9312740628] = "Industrialist.lua",
 }
 
-local gameId = game.GameId
+local placeId = game.PlaceId
 
 local MarketplaceService = game:GetService("MarketplaceService")
 
 local okInfo, info = pcall(function()
-    return MarketplaceService:GetProductInfo(gameId, Enum.InfoType.Game)
+    return MarketplaceService:GetProductInfo(placeId)
 end)
 
 local gameName = (okInfo and info and info.Name) or "Unknown Game"
-local target = GAME_MAP[gameId]
+local target = GAME_MAP[placeId]
 
 if not target then
     warn("[Flashy Loader] Game not supported!")
     warn("Game: " .. gameName)
-    warn("GameId: " .. tostring(gameId))
+    warn("PlaceId: " .. tostring(placeId))
     return
 end
 
 print(string.format(
-    "[Flashy Loader] Detected: %s (GameId %d)",
+    "[Flashy Loader] Detected: %s (PlaceId %d)",
     gameName,
-    gameId
+    placeId
 ))
 
 print("[Flashy Loader] Loading: " .. target)
@@ -57,7 +57,7 @@ if not success then
     warn("================================")
     warn("[Flashy Loader] LOAD FAILED")
     warn("Game: " .. gameName)
-    warn("GameId: " .. tostring(gameId))
+    warn("PlaceId: " .. tostring(placeId))
     warn("Script: " .. target)
     warn("URL: " .. url)
     warn("Error: " .. tostring(result))
