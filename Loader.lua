@@ -10,67 +10,59 @@
 local BASE_URL = "https://raw.githubusercontent.com/flashyshadowstrike/Flashy-Hub/main/Scripts/"
 
 local GAME_MAP = {
-    
     [79268393072444] = "SellLemons.lua",
-
     [9192423027] = "Industrialist.lua",
 }
 
-local Fluent = loadstring(game:HttpGet(
-    "https://github.com/StyearX/Fluent-Modded/releases/download/Fluent/FluentPro"
-))()
+local placeId = game.PlaceId
 
-local placeId  = game.PlaceId
+local MarketplaceService = game:GetService("MarketplaceService")
+
 local okInfo, info = pcall(function()
-    return game:GetService("MarketplaceService"):GetProductInfo(placeId)
+    return MarketplaceService:GetProductInfo(placeId)
 end)
-local gameName = (okInfo and info and info.Name) or "Unknown Game"
 
+local gameName = (okInfo and info and info.Name) or "Unknown Game"
 local target = GAME_MAP[placeId]
 
 if not target then
-    local Window = Fluent:CreateWindow({
-        Title    = "Flashy Studios Loader",
-        SubTitle = "by Flashy Studios",
-        Size     = UDim2.fromOffset(400, 200),
-        Acrylic  = false,
-        Theme    = "Dark",
-    })
-
-    task.spawn(function()
-        task.wait(0.3)
-        Window:Dialog({
-            Title   = "Game Not Supported",
-            Content = ("This game (%s) is not supported yet.\nCheck back later or request support in our Discord!"):format(gameName),
-            Buttons = {
-                {
-                    Title    = "OK",
-                    Callback = function()
-                        Window:Destroy()
-                    end,
-                },
-            },
-        })
-    end)
-
-    warn(("[Loader] Unsupported game: %s (PlaceId %d)"):format(gameName, placeId))
+    warn("[Flashy Loader] Game not supported!")
+    warn("Game: " .. gameName)
+    warn("PlaceId: " .. tostring(placeId))
     return
 end
 
-print(("[Loader] Detected: %s (PlaceId %d) → loading %s"):format(gameName, placeId, target))
+print(string.format(
+    "[Flashy Loader] Detected: %s (PlaceId %d)",
+    gameName,
+    placeId
+))
 
-task.wait(1)
+print("[Flashy Loader] Loading: " .. target)
 
 local url = BASE_URL .. target
-local ok, result = pcall(function()
-    return loadstring(game:HttpGet(url, true))()
+
+local success, result = pcall(function()
+    local source = game:HttpGet(url, true)
+    local scriptFunction, compileError = loadstring(source)
+
+    if not scriptFunction then
+        error("Compilation failed: " .. tostring(compileError))
+    end
+
+    return scriptFunction()
 end)
 
-if not ok then
-    Fluent:Notify({
-        Title    = "Loader Error",
-        Content  = ("Failed to load script for %s.\nCheck console for details."):format(gameName),
-        Duration = 8,
-    })
-    warn(("[Loader] Failed to load %s\nError: %s"):format(url, tostring(result)))
+if not success then
+    warn("================================")
+    warn("[Flashy Loader] LOAD FAILED")
+    warn("Game: " .. gameName)
+    warn("PlaceId: " .. tostring(placeId))
+    warn("Script: " .. target)
+    warn("URL: " .. url)
+    warn("Error: " .. tostring(result))
+    warn("================================")
+else
+    print("[Flashy Loader] Successfully loaded " .. target)
+end
 end
