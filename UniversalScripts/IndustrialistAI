@@ -6,18 +6,17 @@
     /_/   /_/\__,_/____/_/ /_/\__, /   /____/\__/\__,_/\__,_/_/\____/____/  
                              /____/                                         
 
-
     ============================================================================
-    INDUSTRIALIST ULTIMATE AI ASSISTANT (Quizbot TextChat + Tag Detection Edition)
+    INDUSTRIALIST ULTIMATE AI ASSISTANT (Quizbot TextChat + Triple Trigger Edition)
     ============================================================================
     Architecture Overview:
     - Target Game: Industrialist (Roblox)
     - Identity Resolution: Uses LocalPlayer.UserId, Name, and DisplayName
     - Detection Pipeline:
         1. Listens to TextChatService.MessageReceived
-        2. Checks for !help prefix OR @LocalPlayer mention
-        3. Strips prefix/tag leaving clean question
-        4. Handles user tag cooldowns with public chat warnings
+        2. Checks for ### trigger OR !help prefix OR @LocalPlayer mention
+        3. Strips prefix/tag/trigger leaving clean question
+        4. Handles user tag/trigger cooldowns with public chat warnings
         5. Sends clean prompt to Groq API
     ============================================================================
 ]]
@@ -48,13 +47,13 @@ local CONFIG = {
     SHOW_CHAT_RESPONSE = true,
     LISTEN_TO_OTHERS = true,
     IGNORE_OWN_MESSAGES = true,
-    ONLY_RESPOND_TO_PREFIX = false, -- Set to false to allow BOTH Prefix and @Tag
+    ONLY_RESPOND_TO_PREFIX = false,
 
     RESPONSE_STYLE = "Normal",
     PERSONALITY = "Factory Engineer",
 
     -- Cooldown & Delay Configuration
-    TAG_COOLDOWN = 5.0,          -- Cooldown per user when tagging the bot
+    TAG_COOLDOWN = 5.0,          -- Cooldown per user when triggering/tagging the bot
     CHAT_COOLDOWN = 2.5,         -- Delay between public chat outputs
     TELEPORT_COOLDOWN = 3.0,     -- Delay between movement triggers
     REQUEST_COOLDOWN = 1.5,      -- Delay between queue items
@@ -87,7 +86,7 @@ local RequestQueue = {}
 local ChatOutputQueue = {}
 local RequestLogs = {}
 local UserInteractionStats = {}
-local LastUserTagTimestamp = {} -- Tracks per-user tag cooldowns
+local LastUserTagTimestamp = {}
 
 local ProcessingQueue = false
 local ProcessingChat = false
@@ -220,7 +219,7 @@ local Window = WindUI:CreateWindow({
 })
 
 Window:Tag({ Title = "Industrialist", Icon = "cog" })
-Window:Tag({ Title = "v3.3", Icon = "code" })
+Window:Tag({ Title = "v3.5", Icon = "code" })
 
 ------------------------------------------------------------
 -- UI TABS SETUP
@@ -541,7 +540,7 @@ TabFactoryAI:Paragraph({ Title = "3. Infrastructure & Power", Desc = "Analyzes p
 ------------------------------------------------------------
 TabCalculators:Paragraph({
     Title = "Natural-Language Factory Calculator",
-    Desc = "Submit raw calculations via !help or @Mention to view standard production outputs calculated by the AI Core."
+    Desc = "Submit raw calculations via ###, !help or @Mention to view standard production outputs calculated by the AI Core."
 })
 
 ------------------------------------------------------------
@@ -724,6 +723,15 @@ TabSettings:Dropdown({
         "llama-3.1-8b-instant",
         "llama-3.3-70b-versatile",
         "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
+        "whisper-large-v3",
+        "whisper-large-v3-turbo",
+        "canopylabs/orpheus-arabic-saudi",
+        "canopylabs/orpheus-v1-english",
+        "meta-llama/llama-prompt-guard-2-22m",
+        "meta-llama/llama-prompt-guard-2-86m",
+        "minimaxai/minimax-m2.7",
+        "openai/gpt-oss-safeguard-20b",
         "qwen/qwen3.8-27b"
     },
     Value = CONFIG.GROK_MODEL,
@@ -734,7 +742,7 @@ TabSettings:Paragraph({ Title = "Delays & Cooldown Settings", Desc = "Configure 
 
 TabSettings:Input({
     Title = "Tag Cooldown (Seconds)",
-    Desc = "Delay required between tagged messages from the same user",
+    Desc = "Delay required between tagged/triggered messages from the same user",
     Value = tostring(CONFIG.TAG_COOLDOWN),
     Callback = function(val)
         local n = tonumber(val)
@@ -776,7 +784,7 @@ TabSettings:Input({
     Callback = function(val)
         if val and val ~= "" then
             CONFIG.PREFIX = val
-            pcall(function() DynamicPrefixParagraph:Set({ Title = "Current Prefix: " .. CONFIG.PREFIX, Desc = "Send prompts starting with this prefix or @Mention." }) end)
+            pcall(function() DynamicPrefixParagraph:Set({ Title = "Current Prefix: " .. CONFIG.PREFIX, Desc = "Send prompts starting with ###, this prefix, or @Mention." }) end)
         end
     end,
 })
@@ -789,19 +797,23 @@ TabSettings:Toggle({ Title = "Ignore Own Messages", Value = CONFIG.IGNORE_OWN_ME
 ------------------------------------------------------------
 local DynamicPrefixParagraph = TabHelp:Paragraph({
     Title = "Current Command Prefix: " .. CONFIG.PREFIX,
-    Desc = "Use this prefix or @Mention the bot in chat."
+    Desc = "Use ###, this prefix, or @Mention the bot in chat."
 })
 
 TabHelp:Paragraph({
     Title = "Usage Instructions & Command Examples",
     Desc = [[
-Ask the AI directly in public chat using either method:
+Ask the AI directly in public chat using any of these methods:
 
-1. Prefix Command:
+1. ### Trigger:
+• ### how do I make steel?
+• ### what machine makes glass?
+
+2. Prefix Command:
 • !help how do I make steel?
 • !help why is my factory bottlenecking?
 
-2. Mention/Tag Command:
+3. Mention/Tag Command:
 • @]] .. LocalPlayer.Name .. [[ how do I make glass?
 • @]] .. LocalPlayer.DisplayName .. [[ compare machine A and B]]
 })
@@ -926,7 +938,7 @@ local function ProcessRequestQueueLoop()
 end
 
 ------------------------------------------------------------
--- QUIZBOT MENTION & TAG DETECTION ENGINE
+-- DETECT AI REQUEST ENGINE (### + PREFIX + MENTION/TAG)
 ------------------------------------------------------------
 local function InspectAndExtractQuestion(rawText)
     local localUserId = LocalPlayer.UserId
@@ -937,7 +949,17 @@ local function InspectAndExtractQuestion(rawText)
     local isAddressed = false
     local cleanText = rawText
 
-    -- Pattern matches for Quizbot Tag system
+    -- 1. Check for ### Trigger
+    local hashTrigger = "###"
+    local hashPos = string.find(rawText, hashTrigger, 1, true)
+    if hashPos then
+        isAddressed = true
+        cleanText = string.sub(rawText, hashPos + #hashTrigger)
+        cleanText = cleanText:match("^%s*(.-)%s*$") or ""
+        return isAddressed, cleanText
+    end
+
+    -- 2. Check for @Mention Tag System
     local tagPatterns = {
         "<@" .. tostring(localUserId) .. ">",
         "@" .. string.lower(localName),
@@ -946,18 +968,16 @@ local function InspectAndExtractQuestion(rawText)
 
     local rawLower = string.lower(rawText)
 
-    -- 1. Test for Tag/Mention
     for _, pattern in ipairs(tagPatterns) do
         local startIdx, endIdx = rawLower:find(pattern, 1, true)
         if startIdx then
             isAddressed = true
-            -- Strip mention tag out of the text
             cleanText = cleanText:sub(1, startIdx - 1) .. cleanText:sub(endIdx + 1)
             break
         end
     end
 
-    -- 2. Test for Prefix Trigger
+    -- 3. Check for Prefix Trigger (!help)
     local prefixLower = string.lower(prefix)
     if not isAddressed and prefixLower ~= "" then
         if rawLower:sub(1, #prefixLower) == prefixLower then
@@ -1001,33 +1021,33 @@ local function OnChatMessageReceived(message)
     local isAddressed, cleanQuestion = InspectAndExtractQuestion(rawText)
 
     if not isAddressed then
-        AddActivity(string.format("[CHAT] %s: %s [TAG] No AI mention detected", senderPlayer.DisplayName, rawText), "Questions")
+        AddActivity(string.format("[CHAT] %s: %s [TAG] No AI mention/trigger detected", senderPlayer.DisplayName, rawText), "Questions")
         return
     end
 
     AddActivity(string.format("[CHAT] %s: %s", senderPlayer.DisplayName, rawText), "Questions")
-    AddActivity("[TAG] AI mention/prefix detected!", "Questions")
+    AddActivity("[TAG] AI mention/prefix/### detected!", "Questions")
 
     if #cleanQuestion == 0 then
-        AddActivity("[TAG] Message ignored: empty prompt after tag removal", "Questions")
+        AddActivity("[TAG] Message ignored: empty prompt after trigger removal", "Questions")
         return
     end
 
-    -- Check Per-User Tag Cooldown
+    -- Check Per-User Tag/Trigger Cooldown
     local now = os.clock()
     local lastTag = LastUserTagTimestamp[userId] or 0
     local elapsed = now - lastTag
 
     if elapsed < CONFIG.TAG_COOLDOWN then
         local remaining = math.ceil(CONFIG.TAG_COOLDOWN - elapsed)
-        AddActivity(string.format("[TAG COOLDOWN] Ignored tag from %s (%ds remaining)", senderPlayer.DisplayName, remaining), "Errors")
+        AddActivity(string.format("[TAG COOLDOWN] Ignored request from %s (%ds remaining)", senderPlayer.DisplayName, remaining), "Errors")
         
-        -- Tag Cooldown Alert Sent to Public Chat
-        DirectSendAsyncChat(string.format("[AI] @%s I received your tag! Please wait %ds before asking another question.", senderPlayer.DisplayName, remaining))
+        -- Cooldown Alert Sent to Public Chat
+        DirectSendAsyncChat(string.format("[AI] @%s I received your request! Please wait %ds before asking another question.", senderPlayer.DisplayName, remaining))
         return
     end
 
-    -- Record Tag timestamp
+    -- Record timestamp
     LastUserTagTimestamp[userId] = now
 
     AddActivity("[TAG] Clean Question: " .. cleanQuestion, "AI Responses")
@@ -1073,4 +1093,4 @@ end
 ------------------------------------------------------------
 InitializeChatListener()
 SetStatus("Ready")
-NotifyUI("Industrialist AI", "Quizbot Tag Detection & Cooldown Engine Online.", 5)
+NotifyUI("Industrialist AI", "### Trigger + Quizbot Engine Active.", 5)
