@@ -7,18 +7,20 @@
                              /____/                                         
 
     ============================================================================
-    INDUSTRIALIST ULTIMATE AI ASSISTANT (Expanded WindUI V3 Edition)
+    INDUSTRIALIST ULTIMATE AI ASSISTANT (Quizbot TextChat Engine Edition)
     ============================================================================
     Architecture Overview:
     - Target Game: Industrialist (Roblox)
-    - Complete Multi-Tab Modular UI (11 Dedicated Tabs)
-    - Integrated Movement Engine: Instant Teleportation & Noclip Tweening
-    - Live Performance Monitoring (FPS/Ping/Memory) & Dynamic TextChat Engine
+    - Chat Engine: Replicated from Quizbot reference implementation
+        * Reading: TextChatService.MessageReceived
+        * Sender Resolution: TextChatMessage.TextSource -> UserId -> Player
+        * Sending: TextChatService.TextChannels.RBXGeneral:SendAsync(msg)
+    - Groq Model Registry: Updated with exact models (Production & Preview)
     ============================================================================
 ]]
 
 ------------------------------------------------------------
--- SERVICES & SERVICES CHECK
+-- SERVICES
 ------------------------------------------------------------
 local Players = game:GetService("Players")
 local TextChatService = game:GetService("TextChatService")
@@ -45,11 +47,10 @@ local CONFIG = {
     IGNORE_OWN_MESSAGES = false,
     ONLY_RESPOND_TO_PREFIX = true,
 
-    RESPONSE_MODE = "Auto", -- "Auto", "Real Roblox Chat", "Local Fallback"
     RESPONSE_STYLE = "Normal", -- "Short", "Normal", "Detailed", "Expert"
     PERSONALITY = "Factory Engineer",
 
-    CHAT_COOLDOWN = 2.0,
+    CHAT_COOLDOWN = 2.5,       -- Rate limit between SendAsync calls (Quizbot pattern)
     TELEPORT_COOLDOWN = 3.0,
     REQUEST_COOLDOWN = 1.5,
     MAX_HISTORY = 20,
@@ -64,7 +65,7 @@ local CONFIG = {
 
     -- Movement Configuration
     TRANSPORT_METHOD = "Instant", -- "Instant" or "Tween"
-    TWEEN_SPEED = 50, -- Studs per second
+    TWEEN_SPEED = 50,             -- Studs per second
 
     WIKI_SOURCES = {
         Fandom = "https://industrialist.fandom.com/wiki/Industrialist_Wiki",
@@ -75,13 +76,12 @@ local CONFIG = {
 
 -- Session & Runtime State
 local SessionStartTime = os.time()
-local PlayerHistories = {}
-local PlayerGoals = {}
-local RequestQueue = {}
-local ChatOutputQueue = {}
+local PlayerHistories = {}       -- [UserIdString] = { {role="user"/"assistant", content="..."} }
+local RequestQueue = {}          -- Incoming questions queue
+local ChatOutputQueue = {}       -- Outgoing chat message queue (Quizbot rate-limit queue)
 local RecentMessageFingerprints = {}
 local RequestLogs = {}
-local UserInteractionStats = {} -- [UserId] = count
+local UserInteractionStats = {}  -- [UserIdString] = count
 
 local ProcessingQueue = false
 local ProcessingChat = false
@@ -90,6 +90,9 @@ local LastTeleportTime = 0
 local LastRequestTimestamp = {}
 local ActiveTween = nil
 local NoclipConnection = nil
+
+-- Global Chat Listener Connection (Single instance)
+local ChatMessageConnection = nil
 
 local ActiveStats = {
     requests = 0,
@@ -103,7 +106,6 @@ local ActiveStats = {
 }
 
 local CurrentStatus = "Ready"
-local PendingConfirmationAction = nil
 local CurrentRequestState = { player = "None", question = "None", intent = "Idle" }
 
 ------------------------------------------------------------
@@ -127,11 +129,9 @@ task.spawn(function()
     while true do
         task.wait(CONFIG.UPDATE_INTERVAL)
         if CONFIG.PERF_MONITOR_ENABLED then
-            -- Ping calculation
             pcall(function()
                 PerfData.ping = math.floor(StatsService.Network.ServerStatsItem["Data Ping"]:GetValue())
             end)
-            -- Memory calculation
             pcall(function()
                 PerfData.memory = math.floor(StatsService:GetTotalMemoryUsageMb())
             end)
@@ -140,7 +140,7 @@ task.spawn(function()
 end)
 
 ------------------------------------------------------------
--- INDUSTRIALIST HARD-CODED KNOWLEDGE BASE
+-- INDUSTRIALIST KNOWLEDGE BASE
 ------------------------------------------------------------
 local INDUSTRIALIST_KNOWLEDGE = [[
 [Industrialist Game Engine Knowledge Base & Data Schema]
@@ -149,7 +149,7 @@ Wiki Sources:
 - Miraheze: https://industrialist.miraheze.org/wiki/Main_Page
 
 Key Mechanics:
-1. Power Systems: Coal Generators, Fuel Generators, Solar, Nuclear. Power grids require total supply > total demand or machines stall/slow down.
+1. Power Systems: Coal Generators, Fuel Generators, Solar, Nuclear. Power grids require total supply > total demand or machines stall.
 2. Pollution: Produced by combustion machines and heavy industry. Mitigation: Scrubbers, Clean Energy, Filters.
 3. Common Ratios & Chains:
    - Iron Ore -> Blast Furnace / Smelter -> Iron Ingot
@@ -158,7 +158,7 @@ Key Mechanics:
    - Copper Ingot -> Wire Drawer -> Copper Wire
    - Copper Wire + Iron Ingot -> Circuit Assembler -> Electronics
 4. Machine Bottlenecks: Occur due to input shortages, conveyor throughput limits, full output buffers, or insufficient power.
-5. Sourcing & Disagreements: Miraheze is currently preferred for updated machine stats over Fandom links. Note variances when detected.
+5. Sourcing & Disagreements: Miraheze is preferred for updated machine stats over Fandom links. Note variances when detected.
 ]]
 
 ------------------------------------------------------------
@@ -216,7 +216,7 @@ local Window = WindUI:CreateWindow({
 })
 
 Window:Tag({ Title = "Industrialist", Icon = "cog" })
-Window:Tag({ Title = "v3.0", Icon = "code" })
+Window:Tag({ Title = "v3.1", Icon = "code" })
 
 ------------------------------------------------------------
 -- UI TABS SETUP
@@ -287,6 +287,74 @@ local function AddActivity(text, category)
 end
 
 ------------------------------------------------------------
+-- QUIZBOT CHAT DISPATCH ENGINE
+------------------------------------------------------------
+local function GetRBXGeneralChannel()
+    local textChannels = TextChatService:FindFirstChild("TextChannels")
+    if textChannels then
+        return textChannels:FindFirstChild("RBXGeneral")
+    end
+    return nil
+end
+
+local function DirectSendAsyncChat(messageText)
+    local general = GetRBXGeneralChannel()
+    if not general then
+        AddActivity("[CHAT] Failed: RBXGeneral channel not found.", "Errors")
+        return false, "RBXGeneral missing"
+    end
+
+    local ok, err = pcall(function()
+        general:SendAsync(messageText)
+    end)
+
+    if ok then
+        ActiveStats.chatSent = ActiveStats.chatSent + 1
+        AddActivity("[CHAT] Response sent through RBXGeneral", "Actions")
+        return true
+    else
+        AddActivity("[CHAT] SendAsync failed: " .. tostring(err), "Errors")
+        return false, err
+    end
+end
+
+local function ProcessChatOutputQueue()
+    if ProcessingChat then return end
+    ProcessingChat = true
+
+    while #ChatOutputQueue > 0 do
+        local messageText = table.remove(ChatOutputQueue, 1)
+        
+        -- Sanity check: do not send responses containing censorship placeholders
+        if not messageText:find("#####", 1, true) then
+            AddActivity("[CHAT] Sending response through RBXGeneral", "Actions")
+            DirectSendAsyncChat(messageText)
+        else
+            AddActivity("[CHAT] Skipped output message due to ##### filtering", "Errors")
+        end
+
+        task.wait(CONFIG.CHAT_COOLDOWN)
+    end
+
+    ProcessingChat = false
+end
+
+local function QueueResponseForChat(fullText)
+    -- Chunk response to fit within Roblox chat line limits
+    local maxLen = 160
+    local text = fullText
+    while #text > maxLen do
+        local splitIdx = text:sub(1, maxLen):match(".*()%s") or maxLen
+        table.insert(ChatOutputQueue, text:sub(1, splitIdx))
+        text = text:sub(splitIdx + 1)
+    end
+    if #text > 0 then
+        table.insert(ChatOutputQueue, text)
+    end
+    task.spawn(ProcessChatOutputQueue)
+end
+
+------------------------------------------------------------
 -- 1. AI CHAT TAB COMPONENTS
 ------------------------------------------------------------
 local StatusParagraph = TabAIChat:Paragraph({ Title = "AI Status: Ready", Desc = "Initializing status parameters..." })
@@ -318,7 +386,7 @@ TabAIChat:Button({
     Icon = "wifi",
     Callback = function()
         SetStatus("Testing Connection")
-        NotifyUI("API Test", "Pinging Grok API Endpoint...", 3)
+        NotifyUI("API Test", "Pinging Groq API Endpoint...", 3)
         task.spawn(function()
             if CONFIG.GROK_API_KEY == "" then
                 NotifyUI("API Error", "API Key is missing!", 4)
@@ -422,7 +490,6 @@ local AIUsageParagraph = TabPlayers:Paragraph({ Title = "AI Usage Statistics", D
 local RecentUsersParagraph = TabPlayers:Paragraph({ Title = "Recent AI Users", Desc = "No users detected yet." })
 
 local function UpdatePlayersTabDisplay()
-    -- Local Player Overview
     pcall(function()
         PlayerInfoParagraph:Set({
             Title = "Local Player Overview",
@@ -432,7 +499,6 @@ local function UpdatePlayersTabDisplay()
         })
     end)
 
-    -- Performance
     pcall(function()
         PerfParagraph:Set({
             Title = "Client Performance Data",
@@ -441,7 +507,6 @@ local function UpdatePlayersTabDisplay()
         })
     end)
 
-    -- Character
     pcall(function()
         local char = LocalPlayer.Character
         local hum = char and char:FindFirstChildOfClass("Humanoid")
@@ -459,7 +524,6 @@ local function UpdatePlayersTabDisplay()
         end
     end)
 
-    -- AI Usage
     pcall(function()
         AIUsageParagraph:Set({
             Title = "AI Usage Statistics",
@@ -468,7 +532,6 @@ local function UpdatePlayersTabDisplay()
         })
     end)
 
-    -- Recent Users
     pcall(function()
         local lines = {}
         for uid, count in pairs(UserInteractionStats) do
@@ -497,7 +560,6 @@ TabFactoryAI:Paragraph({
     Title = "Factory AI Assistant Engines",
     Desc = "This panel displays active modules supported through natural language prompts. All analysis, optimization, and bottleneck detection features run directly via chat interactions."
 })
-
 TabFactoryAI:Paragraph({ Title = "1. Production Chain Analysis", Desc = "Calculates exact raw inputs, machine ratios, and required infrastructure." })
 TabFactoryAI:Paragraph({ Title = "2. Optimization & Bottlenecks", Desc = "Identifies conveyor overflow, power limitations, and output jams." })
 TabFactoryAI:Paragraph({ Title = "3. Infrastructure & Power", Desc = "Analyzes power demand vs total generation and pollution scrubbing requirements." })
@@ -508,11 +570,6 @@ TabFactoryAI:Paragraph({ Title = "3. Infrastructure & Power", Desc = "Analyzes p
 TabCalculators:Paragraph({
     Title = "Natural-Language Factory Calculator",
     Desc = "Submit raw calculations via !help or view standard production outputs calculated by the AI Core."
-})
-
-local CalcDisplayParagraph = TabCalculators:Paragraph({
-    Title = "Last Processed Calculation",
-    Desc = "Input: None\nFormula: None\nResult: None\nAssumptions: None"
 })
 
 ------------------------------------------------------------
@@ -536,11 +593,6 @@ TabKnowledge:Button({
         setclipboard(CONFIG.WIKI_SOURCES.Miraheze)
         NotifyUI("Wiki Link", "Copied Miraheze Wiki URL to clipboard.", 4)
     end,
-})
-
-TabKnowledge:Paragraph({
-    Title = "Knowledge Capabilities & Grounding",
-    Desc = "Supported Grounding Topics:\n• Machines & Production Rates\n• Recipes & Intermediate Items\n• Resources & Power Ratios\n• Pollution Management\n• Research Upgrades & Economy"
 })
 
 ------------------------------------------------------------
@@ -568,11 +620,6 @@ TabActions:Input({
             NotifyUI("Movement Engine", "Tween speed updated to " .. n, 3)
         end
     end,
-})
-
-local ActionStatusParagraph = TabActions:Paragraph({
-    Title = "Action Status Engine",
-    Desc = "Current Action: None\nTarget: None\nStatus: Idle\nCooldown: Ready"
 })
 
 local function DisableNoclip()
@@ -723,9 +770,9 @@ TabStatistics:Button({
 })
 
 ------------------------------------------------------------
--- 9. SETTINGS TAB COMPONENTS
+-- 9. SETTINGS TAB COMPONENTS & MODEL SELECTION
 ------------------------------------------------------------
-local SecSettingsAPI = TabSettings:Paragraph({ Title = "API Credentials", Desc = "Configure Groq API settings." })
+TabSettings:Paragraph({ Title = "API Credentials", Desc = "Configure Groq API settings." })
 
 TabSettings:Input({
     Title = "Grok API Key",
@@ -737,9 +784,26 @@ TabSettings:Input({
     end,
 })
 
+-- Updated Groq Model Registry (Production & Preview Models)
 TabSettings:Dropdown({
-    Title = "Grok Model",
-    Values = { "llama-3.3-70b-versatile", "llama-3.1-8b-instant", "openai/gpt-oss-120b" },
+    Title = "Groq Model",
+    Values = {
+        -- Production Models
+        "llama-3.1-8b-instant",
+        "llama-3.3-70b-versatile",
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
+        "whisper-large-v3",
+        "whisper-large-v3-turbo",
+        -- Preview Models
+        "canopylabs/orpheus-arabic-saudi",
+        "canopylabs/orpheus-v1-english",
+        "meta-llama/llama-prompt-guard-2-22m",
+        "meta-llama/llama-prompt-guard-2-86m",
+        "minimaxai/minimax-m2.7",
+        "openai/gpt-oss-safeguard-20b",
+        "qwen/qwen3.8-27b"
+    },
     Value = CONFIG.GROK_MODEL,
     Callback = function(val) CONFIG.GROK_MODEL = val end,
 })
@@ -801,17 +865,12 @@ TabAbout:Button({
     Icon = "disc",
     Callback = function()
         setclipboard(CONFIG.DISCORD_INVITE)
-        pcall(function()
-            if setclipboard then
-                setclipboard(CONFIG.DISCORD_INVITE)
-            end
-        end)
         NotifyUI("Discord", "Copied invite URL to clipboard: " .. CONFIG.DISCORD_INVITE, 5)
     end,
 })
 
 ------------------------------------------------------------
--- GROK API DISPATCH & PROCESSING ENGINE
+-- GROK API DISPATCH & PARSING ENGINE
 ------------------------------------------------------------
 local function GetRequestImpl()
     if syn and syn.request then return syn.request end
@@ -823,7 +882,7 @@ end
 
 local function DispatchGrokAPI(messages)
     if CONFIG.GROK_API_KEY == "" then
-        return nil, "Missing Groq/Grok API Key."
+        return nil, "Missing Groq API Key."
     end
 
     local payload = HttpService:JSONEncode({
@@ -878,13 +937,14 @@ local function ParseAIOutput(rawContent)
 end
 
 ------------------------------------------------------------
--- QUEUE & CHAT EXECUTION
+-- CORE REQUEST PROCESSING PIPELINE
 ------------------------------------------------------------
 local function ProcessSingleRequest(item)
     SetStatus("Processing")
     UpdateRequestDisplay(item.playerName, item.question, "Analyzing", "Thinking")
-    AddActivity(item.playerName .. " asked: " .. item.question, "Questions")
+    AddActivity("[AI] Sending to Grok for " .. item.playerName, "AI Responses")
 
+    -- Retrieve isolated conversation history for this specific player
     local history = PlayerHistories[item.userId] or {}
     local messages = {
         { role = "system", content = GetSystemPrompt(CONFIG.RESPONSE_STYLE, CONFIG.PERSONALITY) }
@@ -902,43 +962,53 @@ local function ProcessSingleRequest(item)
     local rawResponse, apiErr = nil, nil
     for attempt = 1, CONFIG.MAX_RETRIES do
         rawResponse, apiErr = DispatchGrokAPI(messages)
-        if rawResponse and not rawResponse:find("#####", 1, true) then
-            break
+        if rawResponse then
+            if not rawResponse:find("#####", 1, true) then
+                AddActivity("[AI] Response received from Grok", "AI Responses")
+                break
+            else
+                ActiveStats.retries = ActiveStats.retries + 1
+                AddActivity("[AI] Response tagged with ##### filter. Retrying attempt " .. attempt, "Errors")
+                task.wait(CONFIG.RETRY_DELAY)
+            end
+        else
+            AddActivity("[AI] Grok API call error: " .. tostring(apiErr), "Errors")
+            task.wait(CONFIG.RETRY_DELAY)
         end
-        ActiveStats.retries = ActiveStats.retries + 1
-        task.wait(CONFIG.RETRY_DELAY)
     end
 
     if not rawResponse then
         ActiveStats.failed = ActiveStats.failed + 1
         SetStatus("Error")
-        AddActivity("API Call Failed: " .. tostring(apiErr), "Errors")
+        AddActivity("[AI] Failed to process query: " .. tostring(apiErr), "Errors")
         UpdateRequestDisplay("None", "None", "Idle", "Failed")
         return
     end
 
     local chatText, actionObj = ParseAIOutput(rawResponse)
     
-    -- Save History
+    -- Save isolated history under the requesting player's UserId
     PlayerHistories[item.userId] = PlayerHistories[item.userId] or {}
     table.insert(PlayerHistories[item.userId], { role = "user", content = item.question })
     table.insert(PlayerHistories[item.userId], { role = "assistant", content = chatText })
 
     UpdateLastResponseDisplay(chatText)
-    AddActivity("Generated response for " .. item.playerName, "AI Responses")
 
-    -- Movement Action Trigger
+    -- Teleportation / Movement Handling
     if actionObj.teleport_requested or actionObj.intent == "TELEPORT" then
         local targetPlayer = Players:GetPlayerByUserId(tonumber(item.userId))
         if targetPlayer then
             local ok, msg = ExecuteMovementToPlayer(targetPlayer)
-            AddActivity("Action: " .. msg, "Actions")
+            AddActivity("[ACTION] " .. msg, "Actions")
         end
     end
 
-    -- Queue Public Chat Output
-    table.insert(ChatOutputQueue, chatText)
+    -- Queue response through Quizbot rate-limited SendAsync engine
+    QueueResponseForChat(chatText)
+    
     ActiveStats.successful = ActiveStats.successful + 1
+    table.insert(RequestLogs, 1, { userId = item.userId, player = item.playerName, question = item.question })
+    
     UpdateRequestDisplay("None", "None", "Idle", "Complete")
     SetStatus("Ready")
 end
@@ -957,35 +1027,83 @@ local function ProcessRequestQueueLoop()
 end
 
 ------------------------------------------------------------
--- CHAT LISTENER & INITIALIZATION
+-- QUIZBOT REFERENCE CHAT LISTENER ENGINE
 ------------------------------------------------------------
-TextChatService.MessageReceived:Connect(function(msg)
-    if PauseListening or not CONFIG.ENABLE_AI or not msg.TextSource then return end
-    
-    local userId = msg.TextSource.UserId
-    if userId == LocalPlayer.UserId and CONFIG.IGNORE_OWN_MESSAGES then return end
-    
-    local text = tostring(msg.Text or "")
-    local prefix = CONFIG.PREFIX
-    if CONFIG.ONLY_RESPOND_TO_PREFIX and string.lower(text):sub(1, #prefix) ~= string.lower(prefix) then
-        return
+local function OnChatMessageReceived(message)
+    if PauseListening or not CONFIG.ENABLE_AI or not CONFIG.ENABLE_COMMAND then return end
+    if not message or not message.TextSource then return end
+
+    local source = message.TextSource
+    local userId = source.UserId
+    if not userId or userId == 0 then return end
+
+    -- Separate Question Asker vs LocalPlayer executing script
+    local player = Players:GetPlayerByUserId(userId)
+    if not player then return end
+
+    if userId == LocalPlayer.UserId then
+        if CONFIG.IGNORE_OWN_MESSAGES then return end
+    else
+        if not CONFIG.LISTEN_TO_OTHERS then return end
     end
 
-    local cleanQuestion = text:sub(#prefix + 1):match("^%s*(.-)%s*$") or ""
+    local rawText = tostring(message.Text or "")
+    local prefix = CONFIG.PREFIX
+    local prefixLower = string.lower(prefix)
+    local rawTextLower = string.lower(rawText)
+
+    if CONFIG.ONLY_RESPOND_TO_PREFIX then
+        if prefixLower == "" or rawTextLower:sub(1, #prefixLower) ~= prefixLower then
+            return
+        end
+    end
+
+    local cleanQuestion = rawText
+    if prefixLower ~= "" and rawTextLower:sub(1, #prefixLower) == prefixLower then
+        cleanQuestion = rawText:sub(#prefix + 1)
+    end
+    cleanQuestion = cleanQuestion:match("^%s*(.-)%s*$") or ""
+
     if #cleanQuestion == 0 then return end
+
+    -- Activity Log: Question detected
+    AddActivity(string.format("[CHAT] %s: %s", player.DisplayName, rawText), "Questions")
+    AddActivity("[AI] Question detected for Grok pipeline", "AI Responses")
 
     ActiveStats.questionsDetected = ActiveStats.questionsDetected + 1
     UserInteractionStats[tostring(userId)] = (UserInteractionStats[tostring(userId)] or 0) + 1
 
-    local p = Players:GetPlayerByUserId(userId)
     table.insert(RequestQueue, {
         userId = tostring(userId),
-        playerName = p and p.DisplayName or "Unknown",
+        username = player.Name,
+        playerName = player.DisplayName,
         question = cleanQuestion
     })
 
     task.spawn(ProcessRequestQueueLoop)
-end)
+end
 
+local function InitializeChatListener()
+    -- Disconnect old listener connection if re-initializing
+    if ChatMessageConnection then
+        pcall(function() ChatMessageConnection:Disconnect() end)
+        ChatMessageConnection = nil
+    end
+
+    local ok, err = pcall(function()
+        ChatMessageConnection = TextChatService.MessageReceived:Connect(OnChatMessageReceived)
+    end)
+
+    if ok then
+        AddActivity("[SYSTEM] Chat listener successfully connected via TextChatService.MessageReceived", "System")
+    else
+        AddActivity("[SYSTEM] TextChatService connection error: " .. tostring(err), "Errors")
+    end
+end
+
+------------------------------------------------------------
+-- INITIALIZATION EXECUTION
+------------------------------------------------------------
+InitializeChatListener()
 SetStatus("Ready")
-NotifyUI("Industrialist AI", "Loaded WindUI V3 Edition.", 5)
+NotifyUI("Industrialist AI", "Quizbot Chat Engine initialized.", 5)
