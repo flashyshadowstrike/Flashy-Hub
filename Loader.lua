@@ -10,7 +10,6 @@
 local BASE_URL = "https://raw.githubusercontent.com/flashyshadowstrike/Flashy-Hub/main/Scripts/"
 
 local GAME_MAP = {
-    [79268393072444] = "SellLemons.lua",
     [9312740628] = "Industrialist.lua",
 }
 
