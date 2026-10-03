@@ -17,7 +17,7 @@ local isMobile =
 local Window = Fluent:CreateWindow({
     Title = "Bring Parts",
     SubTitle = "Universal Physics Controller",
-    Version = "2.1",
+    Version = "2.2",
     TabWidth = isMobile and 130 or 155,
     Size = isMobile
         and UDim2.fromOffset(480, 500)
@@ -74,7 +74,6 @@ local State = {
     TargetPlayer = LocalPlayer,
 
     ScanRadius = 1000,
-    MaxParts = 150,
     MinSize = 0,
     MaxSize = 100,
 
@@ -123,6 +122,7 @@ local State = {
     IgnoreHandles = true,
 
     DisableCollision = true,
+
     NetworkVelocity = Vector3.new(
         14.46262424,
         14.46262424,
@@ -136,22 +136,15 @@ local State = {
 }
 
 local RuntimeFolder =
-    Workspace:FindFirstChild(
-        "__FlashyBringParts"
-    )
+    Workspace:FindFirstChild("__FlashyBringParts")
 
 if RuntimeFolder then
     RuntimeFolder:Destroy()
 end
 
-RuntimeFolder =
-    Instance.new("Folder")
-
-RuntimeFolder.Name =
-    "__FlashyBringParts"
-
-RuntimeFolder.Parent =
-    Workspace
+RuntimeFolder = Instance.new("Folder")
+RuntimeFolder.Name = "__FlashyBringParts"
+RuntimeFolder.Parent = Workspace
 
 local ControlledParts = {}
 local PartData = {}
@@ -164,56 +157,38 @@ local function getRoot(player)
         return nil
     end
 
-    local character =
-        player.Character
+    local character = player.Character
 
     if not character then
         return nil
     end
 
-    return character:FindFirstChild(
-        "HumanoidRootPart"
-    )
-    or character:FindFirstChild(
-        "UpperTorso"
-    )
-    or character:FindFirstChild(
-        "Torso"
-    )
+    return character:FindFirstChild("HumanoidRootPart")
+        or character:FindFirstChild("UpperTorso")
+        or character:FindFirstChild("Torso")
 end
 
 local function getTargetRoot()
-    return getRoot(
-        State.TargetPlayer
-        or LocalPlayer
-    )
+    return getRoot(State.TargetPlayer or LocalPlayer)
 end
 
 local function belongsToCharacter(part)
     local current = part
 
-    while current
-        and current ~= Workspace
-    do
+    while current and current ~= Workspace do
         if current:IsA("Model")
-            and Players:GetPlayerFromCharacter(
-                current
-            )
+            and Players:GetPlayerFromCharacter(current)
         then
             return true
         end
 
-        current =
-            current.Parent
+        current = current.Parent
     end
 
     return false
 end
 
-local function isValidPart(
-    part,
-    origin
-)
+local function isValidPart(part, origin)
     if not part:IsA("BasePart") then
         return false
     end
@@ -222,30 +197,22 @@ local function isValidPart(
         return false
     end
 
-    if part:IsDescendantOf(
-        RuntimeFolder
-    ) then
+    if part:IsDescendantOf(RuntimeFolder) then
         return false
     end
 
-    if State.IgnoreCharacters
-        and belongsToCharacter(part)
-    then
+    if State.IgnoreCharacters and belongsToCharacter(part) then
         return false
     end
 
     if State.IgnoreTools
-        and part:FindFirstAncestorWhichIsA(
-            "Tool"
-        )
+        and part:FindFirstAncestorWhichIsA("Tool")
     then
         return false
     end
 
     if State.IgnoreAccessories
-        and part:FindFirstAncestorWhichIsA(
-            "Accessory"
-        )
+        and part:FindFirstAncestorWhichIsA("Accessory")
     then
         return false
     end
@@ -256,27 +223,18 @@ local function isValidPart(
         return false
     end
 
-    local magnitude =
-        part.Size.Magnitude
+    local magnitude = part.Size.Magnitude
 
-    if magnitude
-        < State.MinSize
-    then
+    if magnitude < State.MinSize then
         return false
     end
 
-    if magnitude
-        > State.MaxSize
-    then
+    if magnitude > State.MaxSize then
         return false
     end
 
     if origin
-        and (
-            part.Position
-            - origin
-        ).Magnitude
-        > State.ScanRadius
+        and (part.Position - origin).Magnitude > State.ScanRadius
     then
         return false
     end
@@ -286,8 +244,7 @@ end
 
 local function enableNetworkControl()
     pcall(function()
-        LocalPlayer.ReplicationFocus =
-            Workspace
+        LocalPlayer.ReplicationFocus = Workspace
     end)
 
     if sethiddenproperty then
@@ -306,19 +263,10 @@ local function createController(part)
         return
     end
 
-    local targetPart =
-        Instance.new("Part")
+    local targetPart = Instance.new("Part")
 
-    targetPart.Name =
-        "Target"
-
-    targetPart.Size =
-        Vector3.new(
-            0.1,
-            0.1,
-            0.1
-        )
-
+    targetPart.Name = "Target"
+    targetPart.Size = Vector3.new(0.1, 0.1, 0.1)
     targetPart.Transparency = 1
     targetPart.Anchored = true
     targetPart.CanCollide = false
@@ -327,133 +275,54 @@ local function createController(part)
     targetPart.CFrame = part.CFrame
     targetPart.Parent = RuntimeFolder
 
-    local targetAttachment =
-        Instance.new("Attachment")
+    local targetAttachment = Instance.new("Attachment")
+    targetAttachment.Name = "__BringTarget"
+    targetAttachment.Parent = targetPart
 
-    targetAttachment.Name =
-        "__BringTarget"
+    local attachment = Instance.new("Attachment")
+    attachment.Name = "__BringAttachment"
+    attachment.Parent = part
 
-    targetAttachment.Parent =
-        targetPart
+    local alignPosition = Instance.new("AlignPosition")
+    alignPosition.Name = "__BringPosition"
+    alignPosition.Attachment0 = attachment
+    alignPosition.Attachment1 = targetAttachment
+    alignPosition.MaxForce = math.huge
+    alignPosition.MaxVelocity = State.MaxVelocity
+    alignPosition.Responsiveness = State.Responsiveness
+    alignPosition.ApplyAtCenterOfMass = true
+    alignPosition.RigidityEnabled = false
+    alignPosition.Parent = part
 
-    local attachment =
-        Instance.new("Attachment")
+    local alignOrientation = Instance.new("AlignOrientation")
+    alignOrientation.Name = "__BringOrientation"
+    alignOrientation.Attachment0 = attachment
+    alignOrientation.Attachment1 = targetAttachment
+    alignOrientation.MaxTorque = math.huge
+    alignOrientation.MaxAngularVelocity = math.huge
+    alignOrientation.Responsiveness = State.Responsiveness
+    alignOrientation.RigidityEnabled = false
+    alignOrientation.Parent = part
 
-    attachment.Name =
-        "__BringAttachment"
-
-    attachment.Parent =
-        part
-
-    local alignPosition =
-        Instance.new(
-            "AlignPosition"
-        )
-
-    alignPosition.Name =
-        "__BringPosition"
-
-    alignPosition.Attachment0 =
-        attachment
-
-    alignPosition.Attachment1 =
-        targetAttachment
-
-    alignPosition.MaxForce =
-        math.huge
-
-    alignPosition.MaxVelocity =
-        State.MaxVelocity
-
-    alignPosition.Responsiveness =
-        State.Responsiveness
-
-    alignPosition.ApplyAtCenterOfMass =
-        true
-
-    alignPosition.RigidityEnabled =
-        false
-
-    alignPosition.Parent =
-        part
-
-    local alignOrientation =
-        Instance.new(
-            "AlignOrientation"
-        )
-
-    alignOrientation.Name =
-        "__BringOrientation"
-
-    alignOrientation.Attachment0 =
-        attachment
-
-    alignOrientation.Attachment1 =
-        targetAttachment
-
-    alignOrientation.MaxTorque =
-        math.huge
-
-    alignOrientation.MaxAngularVelocity =
-        math.huge
-
-    alignOrientation.Responsiveness =
-        State.Responsiveness
-
-    alignOrientation.RigidityEnabled =
-        false
-
-    alignOrientation.Parent =
-        part
-
-    local torque =
-        Instance.new("Torque")
-
-    torque.Name =
-        "__BringTorque"
-
-    torque.Attachment0 =
-        attachment
-
-    torque.Torque =
-        Vector3.zero
-
-    torque.RelativeTo =
-        Enum.ActuatorRelativeTo.World
-
-    torque.Parent =
-        part
+    local torque = Instance.new("Torque")
+    torque.Name = "__BringTorque"
+    torque.Attachment0 = attachment
+    torque.Torque = Vector3.zero
+    torque.RelativeTo = Enum.ActuatorRelativeTo.World
+    torque.Parent = part
 
     PartData[part] = {
-        OriginalCanCollide =
-            part.CanCollide,
+        OriginalCanCollide = part.CanCollide,
+        OriginalCanTouch = part.CanTouch,
+        OriginalCanQuery = part.CanQuery,
+        OriginalPhysicalProperties = part.CustomPhysicalProperties,
 
-        OriginalCanTouch =
-            part.CanTouch,
-
-        OriginalCanQuery =
-            part.CanQuery,
-
-        OriginalPhysicalProperties =
-            part.CustomPhysicalProperties,
-
-        TargetPart =
-            targetPart,
-
-        TargetAttachment =
-            targetAttachment,
-
-        Attachment =
-            attachment,
-
-        AlignPosition =
-            alignPosition,
-
-        AlignOrientation =
-            alignOrientation,
-
-        Torque =
-            torque,
+        TargetPart = targetPart,
+        TargetAttachment = targetAttachment,
+        Attachment = attachment,
+        AlignPosition = alignPosition,
+        AlignOrientation = alignOrientation,
+        Torque = torque,
     }
 
     pcall(function()
@@ -469,8 +338,7 @@ local function createController(part)
 end
 
 local function removeController(part)
-    local data =
-        PartData[part]
+    local data = PartData[part]
 
     if not data then
         return
@@ -516,8 +384,7 @@ local function removeController(part)
 end
 
 local function updateCollision(part)
-    local data =
-        PartData[part]
+    local data = PartData[part]
 
     if not data
         or not part.Parent
@@ -545,11 +412,7 @@ local function updateCollision(part)
 end
 
 local function updateAllCollisions()
-    for _, part
-        in ipairs(
-            ControlledParts
-        )
-    do
+    for _, part in ipairs(ControlledParts) do
         updateCollision(part)
     end
 end
@@ -557,34 +420,23 @@ end
 local function releaseParts()
     State.Enabled = false
 
-    for _, part
-        in ipairs(
-            ControlledParts
-        )
-    do
+    for _, part in ipairs(ControlledParts) do
         removeController(part)
     end
 
-    table.clear(
-        ControlledParts
-    )
+    table.clear(ControlledParts)
 
-    for part
-        in pairs(PartData)
-    do
+    for part in pairs(PartData) do
         removeController(part)
     end
 
-    table.clear(
-        PartData
-    )
+    table.clear(PartData)
 end
 
 local function scanParts()
     releaseParts()
 
-    local root =
-        getRoot(LocalPlayer)
+    local root = getRoot(LocalPlayer)
 
     if not root then
         Fluent:Notify({
@@ -601,15 +453,9 @@ local function scanParts()
 
     local found = {}
 
-    for _, object
-        in ipairs(
-            Workspace:GetDescendants()
-        )
-    do
-        if #found >= State.MaxParts then
-            break
-        end
-
+    for _, object in ipairs(
+        Workspace:GetDescendants()
+    ) do
         if isValidPart(
             object,
             root.Position
@@ -625,8 +471,7 @@ local function scanParts()
         end
     end
 
-    ControlledParts =
-        found
+    ControlledParts = found
 
     updateAllCollisions()
 
@@ -634,51 +479,38 @@ local function scanParts()
         Title = "Part Scan",
         Content =
             "Found "
-            .. tostring(
-                #ControlledParts
-            )
+            .. tostring(#ControlledParts)
             .. " loose parts.",
 
+        SubContent = "No part-count limit is enabled.",
+
         Type = "Success",
-        Duration = 3,
+        Duration = 4,
     })
 end
 
 local function findPlayer(text)
-    text =
-        string.lower(
-            text or ""
-        )
+    text = string.lower(text or "")
 
     if text == "" then
         return LocalPlayer
     end
 
-    for _, player
-        in ipairs(
-            Players:GetPlayers()
-        )
-    do
-        if string.lower(
-            player.Name
-        ) == text
-        then
+    for _, player in ipairs(
+        Players:GetPlayers()
+    ) do
+        if string.lower(player.Name) == text then
             return player
         end
 
-        if string.lower(
-            player.DisplayName
-        ) == text
-        then
+        if string.lower(player.DisplayName) == text then
             return player
         end
     end
 
-    for _, player
-        in ipairs(
-            Players:GetPlayers()
-        )
-    do
+    for _, player in ipairs(
+        Players:GetPlayers()
+    ) do
         local username =
             string.lower(
                 player.Name
@@ -694,8 +526,7 @@ local function findPlayer(text)
             text,
             1,
             true
-        )
-        then
+        ) then
             return player
         end
 
@@ -704,8 +535,7 @@ local function findPlayer(text)
             text,
             1,
             true
-        )
-        then
+        ) then
             return player
         end
     end
@@ -724,9 +554,7 @@ local function getHorizontalCFrame(root)
             look.Z
         )
 
-    if flatLook.Magnitude
-        < 0.01
-    then
+    if flatLook.Magnitude < 0.01 then
         flatLook =
             Vector3.new(
                 0,
@@ -740,15 +568,11 @@ local function getHorizontalCFrame(root)
 
     return CFrame.lookAt(
         root.Position,
-        root.Position
-            + flatLook
+        root.Position + flatLook
     )
 end
 
-local function setPartTarget(
-    part,
-    cf
-)
+local function setPartTarget(part, cf)
     local data =
         PartData[part]
 
@@ -758,14 +582,10 @@ local function setPartTarget(
         return
     end
 
-    data.TargetPart.CFrame =
-        cf
+    data.TargetPart.CFrame = cf
 end
 
-local function orbitParts(
-    root,
-    dt
-)
+local function orbitParts(root, dt)
     local count =
         #ControlledParts
 
@@ -776,18 +596,15 @@ local function orbitParts(
     movementClock +=
         dt * State.OrbitSpeed
 
-    for index, part
-        in ipairs(
-            ControlledParts
-        )
-    do
+    for index, part in ipairs(
+        ControlledParts
+    ) do
         if not part.Parent then
             continue
         end
 
         local fraction =
-            (index - 1)
-            / count
+            (index - 1) / count
 
         local angle =
             movementClock
@@ -836,18 +653,13 @@ local function orbitParts(
 
         setPartTarget(
             part,
-            CFrame.new(
-                position
-            )
-            * rotation
+            CFrame.new(position)
+                * rotation
         )
     end
 end
 
-local function surfParts(
-    root,
-    dt
-)
+local function surfParts(root, dt)
     local count =
         #ControlledParts
 
@@ -856,8 +668,7 @@ local function surfParts(
     end
 
     movementClock +=
-        dt
-        * State.SurfWaveSpeed
+        dt * State.SurfWaveSpeed
 
     local columns =
         math.max(
@@ -879,24 +690,17 @@ local function surfParts(
 
     local base =
         State.SurfFollowRotation
-        and getHorizontalCFrame(
-            root
-        )
-        or CFrame.new(
-            root.Position
-        )
+        and getHorizontalCFrame(root)
+        or CFrame.new(root.Position)
 
-    for index, part
-        in ipairs(
-            ControlledParts
-        )
-    do
+    for index, part in ipairs(
+        ControlledParts
+    ) do
         if not part.Parent then
             continue
         end
 
-        local i =
-            index - 1
+        local i = index - 1
 
         local column =
             i % columns
@@ -949,9 +753,7 @@ local function surfParts(
             )
 
         local wave =
-            math.sin(
-                phase
-            )
+            math.sin(phase)
             * State.SurfWaveHeight
             * stability
 
@@ -974,21 +776,14 @@ local function surfParts(
 
         if State.SurfTilt then
             local slope =
-                math.cos(
-                    phase
-                )
+                math.cos(phase)
                 * State.SurfWaveHeight
                 * State.SurfWaveFrequency
                 * stability
 
-            local pitch =
-                -math.atan(
-                    slope
-                )
-
             rotation =
                 CFrame.Angles(
-                    pitch,
+                    -math.atan(slope),
                     0,
                     0
                 )
@@ -1007,10 +802,7 @@ local function surfParts(
     end
 end
 
-local function tornadoParts(
-    root,
-    dt
-)
+local function tornadoParts(root, dt)
     local count =
         #ControlledParts
 
@@ -1019,14 +811,11 @@ local function tornadoParts(
     end
 
     movementClock +=
-        dt
-        * State.TornadoSpeed
+        dt * State.TornadoSpeed
 
-    for index, part
-        in ipairs(
-            ControlledParts
-        )
-    do
+    for index, part in ipairs(
+        ControlledParts
+    ) do
         if not part.Parent then
             continue
         end
@@ -1049,10 +838,10 @@ local function tornadoParts(
                     - State.TornadoBaseRadius
                 )
 
-        local layers =
+        local turns =
             math.max(
-                3,
-                count / 6
+                4,
+                math.sqrt(count)
             )
 
         local angle =
@@ -1060,7 +849,7 @@ local function tornadoParts(
             + fraction
                 * math.pi
                 * 2
-                * layers
+                * turns
 
         local verticalWave =
             math.sin(
@@ -1129,11 +918,9 @@ local function teleportParts(root)
             + State.Offset
         )
 
-    for _, part
-        in ipairs(
-            ControlledParts
-        )
-    do
+    for _, part in ipairs(
+        ControlledParts
+    ) do
         if part.Parent then
             setPartTarget(
                 part,
@@ -1143,15 +930,10 @@ local function teleportParts(root)
     end
 end
 
-local function pullParts(
-    root,
-    dt
-)
-    for _, part
-        in ipairs(
-            ControlledParts
-        )
-    do
+local function pullParts(root, dt)
+    for _, part in ipairs(
+        ControlledParts
+    ) do
         if not part.Parent then
             continue
         end
@@ -1173,8 +955,7 @@ local function pullParts(
             + State.Offset
 
         local difference =
-            target
-            - current
+            target - current
 
         local distance =
             difference.Magnitude
@@ -1183,29 +964,22 @@ local function pullParts(
             local step =
                 math.min(
                     distance,
-                    State.PullSpeed
-                        * dt
+                    State.PullSpeed * dt
                 )
 
             local nextPosition =
                 current
-                + difference.Unit
-                    * step
+                + difference.Unit * step
 
             setPartTarget(
                 part,
-                CFrame.new(
-                    nextPosition
-                )
+                CFrame.new(nextPosition)
             )
         end
     end
 end
 
-local function sphereParts(
-    root,
-    dt
-)
+local function sphereParts(root, dt)
     local count =
         #ControlledParts
 
@@ -1214,8 +988,7 @@ local function sphereParts(
     end
 
     movementClock +=
-        dt
-        * State.SphereSpeed
+        dt * State.SphereSpeed
 
     local goldenAngle =
         math.pi
@@ -1224,11 +997,9 @@ local function sphereParts(
             - math.sqrt(5)
         )
 
-    for index, part
-        in ipairs(
-            ControlledParts
-        )
-    do
+    for index, part in ipairs(
+        ControlledParts
+    ) do
         if not part.Parent then
             continue
         end
@@ -1256,8 +1027,7 @@ local function sphereParts(
             )
 
         local theta =
-            goldenAngle
-            * i
+            goldenAngle * i
             + movementClock
 
         local offset =
@@ -1286,11 +1056,9 @@ local function stackParts(root)
     local height =
         State.Offset.Y
 
-    for _, part
-        in ipairs(
-            ControlledParts
-        )
-    do
+    for _, part in ipairs(
+        ControlledParts
+    ) do
         if not part.Parent then
             continue
         end
@@ -1327,15 +1095,11 @@ local function lineParts(root)
         #ControlledParts
 
     local base =
-        getHorizontalCFrame(
-            root
-        )
+        getHorizontalCFrame(root)
 
-    for index, part
-        in ipairs(
-            ControlledParts
-        )
-    do
+    for index, part in ipairs(
+        ControlledParts
+    ) do
         if not part.Parent then
             continue
         end
@@ -1343,8 +1107,7 @@ local function lineParts(root)
         local position =
             (
                 index - 1
-                - (count - 1)
-                    / 2
+                - (count - 1) / 2
             )
             * State.LineSpacing
 
@@ -1360,114 +1123,87 @@ local function lineParts(root)
     end
 end
 
-RunService.Heartbeat:Connect(
-    function(dt)
-        enableNetworkControl()
+RunService.Heartbeat:Connect(function(dt)
+    enableNetworkControl()
 
-        for _, part
-            in ipairs(
-                ControlledParts
-            )
-        do
-            if part
-                and part.Parent
-            then
-                pcall(function()
-                    part.AssemblyLinearVelocity =
-                        State.NetworkVelocity
-                end)
-            end
-        end
-
-        if not State.Enabled then
-            return
-        end
-
-        cleanupClock += dt
-
-        if cleanupClock >= 1 then
-            cleanupClock = 0
-
-            for index =
-                #ControlledParts,
-                1,
-                -1
-            do
-                local part =
-                    ControlledParts[index]
-
-                if not part
-                    or not part.Parent
-                    or part.Anchored
-                then
-                    if part then
-                        removeController(
-                            part
-                        )
-                    end
-
-                    table.remove(
-                        ControlledParts,
-                        index
-                    )
-                end
-            end
-        end
-
-        local root =
-            getTargetRoot()
-
-        if not root then
-            return
-        end
-
-        if State.Mode == "Orbit" then
-            orbitParts(
-                root,
-                dt
-            )
-
-        elseif State.Mode == "Surf" then
-            surfParts(
-                root,
-                dt
-            )
-
-        elseif State.Mode == "Tornado" then
-            tornadoParts(
-                root,
-                dt
-            )
-
-        elseif State.Mode == "Teleport" then
-            teleportParts(
-                root
-            )
-
-        elseif State.Mode == "Pull" then
-            pullParts(
-                root,
-                dt
-            )
-
-        elseif State.Mode == "Sphere" then
-            sphereParts(
-                root,
-                dt
-            )
-
-        elseif State.Mode == "Stack" then
-            stackParts(
-                root
-            )
-
-        elseif State.Mode == "Line" then
-            lineParts(
-                root
-            )
+    for _, part in ipairs(
+        ControlledParts
+    ) do
+        if part and part.Parent then
+            pcall(function()
+                part.AssemblyLinearVelocity =
+                    State.NetworkVelocity
+            end)
         end
     end
-)
+
+    if not State.Enabled then
+        return
+    end
+
+    cleanupClock += dt
+
+    if cleanupClock >= 1 then
+        cleanupClock = 0
+
+        for index =
+            #ControlledParts,
+            1,
+            -1
+        do
+            local part =
+                ControlledParts[index]
+
+            if not part
+                or not part.Parent
+                or part.Anchored
+            then
+                if part then
+                    removeController(
+                        part
+                    )
+                end
+
+                table.remove(
+                    ControlledParts,
+                    index
+                )
+            end
+        end
+    end
+
+    local root =
+        getTargetRoot()
+
+    if not root then
+        return
+    end
+
+    if State.Mode == "Orbit" then
+        orbitParts(root, dt)
+
+    elseif State.Mode == "Surf" then
+        surfParts(root, dt)
+
+    elseif State.Mode == "Tornado" then
+        tornadoParts(root, dt)
+
+    elseif State.Mode == "Teleport" then
+        teleportParts(root)
+
+    elseif State.Mode == "Pull" then
+        pullParts(root, dt)
+
+    elseif State.Mode == "Sphere" then
+        sphereParts(root, dt)
+
+    elseif State.Mode == "Stack" then
+        stackParts(root)
+
+    elseif State.Mode == "Line" then
+        lineParts(root)
+    end
+end)
 
 local MainSection =
     Tabs.Main:AddSection(
@@ -1478,24 +1214,19 @@ local MainSection =
 MainSection:AddToggle(
     "ControllerEnabled",
     {
-        Title =
-            "Enable Bring Parts",
-
+        Title = "Enable Bring Parts",
         Description =
-            "Starts moving the scanned loose parts.",
-
+            "Starts moving all scanned loose parts.",
         Default = false,
 
         Callback = function(value)
             if value
-                and #ControlledParts
-                    == 0
+                and #ControlledParts == 0
             then
                 scanParts()
             end
 
-            State.Enabled =
-                value
+            State.Enabled = value
 
             updateAllCollisions()
         end,
@@ -1505,8 +1236,7 @@ MainSection:AddToggle(
 MainSection:AddDropdown(
     "MovementMode",
     {
-        Title =
-            "Movement Mode",
+        Title = "Movement Mode",
 
         Values = {
             "Orbit",
@@ -1519,77 +1249,43 @@ MainSection:AddDropdown(
             "Line",
         },
 
-        Default =
-            "Orbit",
-
+        Default = "Orbit",
         Multi = false,
-
         Animated = true,
 
-        Callback =
-            function(value)
-                State.Mode =
-                    value
+        Callback = function(value)
+            State.Mode = value
 
-                movementClock = 0
+            movementClock = 0
 
-                updateAllCollisions()
+            updateAllCollisions()
 
-                Fluent:Notify({
-                    Title =
-                        "Movement Mode",
-
-                    Content =
-                        value,
-
-                    Type =
-                        "Info",
-
-                    Duration =
-                        2,
-                })
-            end,
+            Fluent:Notify({
+                Title = "Movement Mode",
+                Content = value,
+                Type = "Info",
+                Duration = 2,
+            })
+        end,
     }
 )
 
 MainSection:AddButton({
-    Title =
-        "Scan Loose Parts",
+    Title = "Scan All Loose Parts",
+    Icon = "lucide/scan-search",
+    Description =
+        "Scans every valid loose part within the selected radius.",
 
-    Icon =
-        "lucide/scan-search",
-
-    Callback =
-        function()
-            scanParts()
-        end,
+    Callback = scanParts,
 })
 
 MainSection:AddButton({
-    Title =
-        "Release All Parts",
+    Title = "Release All Parts",
+    Icon = "lucide/unlink",
 
-    Icon =
-        "lucide/unlink",
-
-    Callback =
-        function()
-            releaseParts()
-
-            Fluent:Notify({
-                Title =
-                    "Released",
-
-                Content =
-                    "All controlled parts were released.",
-
-                Type =
-                    "Success",
-
-                Duration =
-                    2,
-            })
-        end,
+    Callback = function()
+        releaseParts()
+    end,
 })
 
 local OrbitSection =
@@ -1598,142 +1294,79 @@ local OrbitSection =
         "lucide/orbit"
     )
 
-OrbitSection:AddSlider(
-    "OrbitRadius",
-    {
-        Title = "Radius",
-        Min = 2,
-        Max = 100,
-        Default =
-            State.OrbitRadius,
-        Rounding = 0,
+OrbitSection:AddSlider("OrbitRadius", {
+    Title = "Radius",
+    Min = 2,
+    Max = 100,
+    Default = State.OrbitRadius,
+    Rounding = 0,
+    Callback = function(v)
+        State.OrbitRadius = v
+    end,
+})
 
-        Callback =
-            function(value)
-                State.OrbitRadius =
-                    value
-            end,
-    }
-)
+OrbitSection:AddSlider("OrbitHeight", {
+    Title = "Height",
+    Min = -50,
+    Max = 50,
+    Default = State.OrbitHeight,
+    Rounding = 1,
+    Callback = function(v)
+        State.OrbitHeight = v
+    end,
+})
 
-OrbitSection:AddSlider(
-    "OrbitHeight",
-    {
-        Title = "Height",
-        Min = -50,
-        Max = 50,
-        Default =
-            State.OrbitHeight,
-        Rounding = 1,
+OrbitSection:AddSlider("OrbitSpeed", {
+    Title = "Speed",
+    Min = -15,
+    Max = 15,
+    Default = State.OrbitSpeed,
+    Rounding = 1,
+    Callback = function(v)
+        State.OrbitSpeed = v
+    end,
+})
 
-        Callback =
-            function(value)
-                State.OrbitHeight =
-                    value
-            end,
-    }
-)
+OrbitSection:AddSlider("OrbitWaveHeight", {
+    Title = "Wave Height",
+    Min = 0,
+    Max = 20,
+    Default = State.OrbitWaveHeight,
+    Rounding = 1,
+    Callback = function(v)
+        State.OrbitWaveHeight = v
+    end,
+})
 
-OrbitSection:AddSlider(
-    "OrbitSpeed",
-    {
-        Title = "Speed",
-        Min = -15,
-        Max = 15,
-        Default =
-            State.OrbitSpeed,
-        Rounding = 1,
+OrbitSection:AddSlider("OrbitWaveSpeed", {
+    Title = "Wave Speed",
+    Min = 0,
+    Max = 15,
+    Default = State.OrbitWaveSpeed,
+    Rounding = 1,
+    Callback = function(v)
+        State.OrbitWaveSpeed = v
+    end,
+})
 
-        Callback =
-            function(value)
-                State.OrbitSpeed =
-                    value
-            end,
-    }
-)
+OrbitSection:AddToggle("OrbitSpin", {
+    Title = "Spin Parts",
+    Default = State.OrbitSpin,
+    Callback = function(v)
+        State.OrbitSpin = v
+    end,
+})
 
-OrbitSection:AddSlider(
-    "OrbitWaveHeight",
-    {
-        Title =
-            "Wave Height",
-
-        Min = 0,
-        Max = 20,
-
-        Default =
-            State.OrbitWaveHeight,
-
-        Rounding = 1,
-
-        Callback =
-            function(value)
-                State.OrbitWaveHeight =
-                    value
-            end,
-    }
-)
-
-OrbitSection:AddSlider(
-    "OrbitWaveSpeed",
-    {
-        Title =
-            "Wave Speed",
-
-        Min = 0,
-        Max = 15,
-
-        Default =
-            State.OrbitWaveSpeed,
-
-        Rounding = 1,
-
-        Callback =
-            function(value)
-                State.OrbitWaveSpeed =
-                    value
-            end,
-    }
-)
-
-OrbitSection:AddToggle(
-    "OrbitSpin",
-    {
-        Title =
-            "Spin Parts",
-
-        Default =
-            State.OrbitSpin,
-
-        Callback =
-            function(value)
-                State.OrbitSpin =
-                    value
-            end,
-    }
-)
-
-OrbitSection:AddSlider(
-    "OrbitSpinSpeed",
-    {
-        Title =
-            "Part Spin Speed",
-
-        Min = 0,
-        Max = 15,
-
-        Default =
-            State.OrbitSpinSpeed,
-
-        Rounding = 1,
-
-        Callback =
-            function(value)
-                State.OrbitSpinSpeed =
-                    value
-            end,
-    }
-)
+OrbitSection:AddSlider("OrbitSpinSpeed", {
+    Title = "Part Spin Speed",
+    Min = 0,
+    Max = 15,
+    Default = State.OrbitSpinSpeed,
+    Rounding = 1,
+    Callback = function(v)
+        State.OrbitSpinSpeed = v
+    end,
+})
 
 local SurfPlatform =
     Tabs.Surf:AddSection(
@@ -1741,85 +1374,49 @@ local SurfPlatform =
         "lucide/waves"
     )
 
-SurfPlatform:AddSlider(
-    "SurfWidth",
-    {
-        Title = "Width",
-        Min = 4,
-        Max = 60,
-        Default =
-            State.SurfWidth,
-        Rounding = 0,
+SurfPlatform:AddSlider("SurfWidth", {
+    Title = "Width",
+    Min = 4,
+    Max = 60,
+    Default = State.SurfWidth,
+    Rounding = 0,
+    Callback = function(v)
+        State.SurfWidth = v
+    end,
+})
 
-        Callback =
-            function(value)
-                State.SurfWidth =
-                    value
-            end,
-    }
-)
+SurfPlatform:AddSlider("SurfLength", {
+    Title = "Length",
+    Min = 4,
+    Max = 80,
+    Default = State.SurfLength,
+    Rounding = 0,
+    Callback = function(v)
+        State.SurfLength = v
+    end,
+})
 
-SurfPlatform:AddSlider(
-    "SurfLength",
-    {
-        Title = "Length",
-        Min = 4,
-        Max = 80,
-        Default =
-            State.SurfLength,
-        Rounding = 0,
+SurfPlatform:AddSlider("SurfHeight", {
+    Title = "Height Under Player",
+    Min = -15,
+    Max = 5,
+    Default = State.SurfHeight,
+    Rounding = 1,
+    Callback = function(v)
+        State.SurfHeight = v
+    end,
+})
 
-        Callback =
-            function(value)
-                State.SurfLength =
-                    value
-            end,
-    }
-)
-
-SurfPlatform:AddSlider(
-    "SurfHeight",
-    {
-        Title =
-            "Height Under Player",
-
-        Min = -15,
-        Max = 5,
-
-        Default =
-            State.SurfHeight,
-
-        Rounding = 1,
-
-        Callback =
-            function(value)
-                State.SurfHeight =
-                    value
-            end,
-    }
-)
-
-SurfPlatform:AddSlider(
-    "SurfForwardOffset",
-    {
-        Title =
-            "Forward Offset",
-
-        Min = -30,
-        Max = 30,
-
-        Default =
-            State.SurfForwardOffset,
-
-        Rounding = 1,
-
-        Callback =
-            function(value)
-                State.SurfForwardOffset =
-                    value
-            end,
-    }
-)
+SurfPlatform:AddSlider("SurfForwardOffset", {
+    Title = "Forward Offset",
+    Min = -30,
+    Max = 30,
+    Default = State.SurfForwardOffset,
+    Rounding = 1,
+    Callback = function(v)
+        State.SurfForwardOffset = v
+    end,
+})
 
 local SurfWave =
     Tabs.Surf:AddSection(
@@ -1827,93 +1424,49 @@ local SurfWave =
         "lucide/activity"
     )
 
-SurfWave:AddSlider(
-    "SurfWaveHeight",
-    {
-        Title =
-            "Wave Height",
+SurfWave:AddSlider("SurfWaveHeight", {
+    Title = "Wave Height",
+    Min = 0,
+    Max = 12,
+    Default = State.SurfWaveHeight,
+    Rounding = 1,
+    Callback = function(v)
+        State.SurfWaveHeight = v
+    end,
+})
 
-        Min = 0,
-        Max = 12,
+SurfWave:AddSlider("SurfWaveSpeed", {
+    Title = "Wave Speed",
+    Min = -15,
+    Max = 15,
+    Default = State.SurfWaveSpeed,
+    Rounding = 1,
+    Callback = function(v)
+        State.SurfWaveSpeed = v
+    end,
+})
 
-        Default =
-            State.SurfWaveHeight,
+SurfWave:AddSlider("SurfWaveFrequency", {
+    Title = "Wave Frequency",
+    Min = 0.05,
+    Max = 2,
+    Default = State.SurfWaveFrequency,
+    Rounding = 2,
+    Callback = function(v)
+        State.SurfWaveFrequency = v
+    end,
+})
 
-        Rounding = 1,
-
-        Callback =
-            function(value)
-                State.SurfWaveHeight =
-                    value
-            end,
-    }
-)
-
-SurfWave:AddSlider(
-    "SurfWaveSpeed",
-    {
-        Title =
-            "Wave Speed",
-
-        Min = -15,
-        Max = 15,
-
-        Default =
-            State.SurfWaveSpeed,
-
-        Rounding = 1,
-
-        Callback =
-            function(value)
-                State.SurfWaveSpeed =
-                    value
-            end,
-    }
-)
-
-SurfWave:AddSlider(
-    "SurfWaveFrequency",
-    {
-        Title =
-            "Wave Frequency",
-
-        Min = 0.05,
-        Max = 2,
-
-        Default =
-            State.SurfWaveFrequency,
-
-        Rounding = 2,
-
-        Callback =
-            function(value)
-                State.SurfWaveFrequency =
-                    value
-            end,
-    }
-)
-
-SurfWave:AddSlider(
-    "SurfSideWave",
-    {
-        Title =
-            "Side Wave",
-
-        Min = 0,
-        Max = 5,
-
-        Default =
-            State.SurfSideWave,
-
-        Rounding = 1,
-
-        Callback =
-            function(value)
-                State.SurfSideWave =
-                    value
-            end,
-    }
-)
+SurfWave:AddSlider("SurfSideWave", {
+    Title = "Side Wave",
+    Min = 0,
+    Max = 5,
+    Default = State.SurfSideWave,
+    Rounding = 1,
+    Callback = function(v)
+        State.SurfSideWave = v
+    end,
+})
 
 local SurfBehavior =
     Tabs.Surf:AddSection(
@@ -1924,56 +1477,35 @@ local SurfBehavior =
 SurfBehavior:AddToggle(
     "SurfFollowRotation",
     {
-        Title =
-            "Follow Player Direction",
-
-        Default =
-            State.SurfFollowRotation,
-
-        Callback =
-            function(value)
-                State.SurfFollowRotation =
-                    value
-            end,
+        Title = "Follow Player Direction",
+        Default = State.SurfFollowRotation,
+        Callback = function(v)
+            State.SurfFollowRotation = v
+        end,
     }
 )
 
 SurfBehavior:AddToggle(
     "SurfTilt",
     {
-        Title =
-            "Tilt Along Wave",
-
-        Default =
-            State.SurfTilt,
-
-        Callback =
-            function(value)
-                State.SurfTilt =
-                    value
-            end,
+        Title = "Tilt Along Wave",
+        Default = State.SurfTilt,
+        Callback = function(v)
+            State.SurfTilt = v
+        end,
     }
 )
 
 SurfBehavior:AddToggle(
     "SurfCollisions",
     {
-        Title =
-            "Surfable Collision",
+        Title = "Surfable Collision",
+        Default = State.SurfCollisions,
 
-        Description =
-            "Allows the player to stand on the moving parts.",
-
-        Default =
-            State.SurfCollisions,
-
-        Callback =
-            function(value)
-                State.SurfCollisions =
-                    value
-
-                updateAllCollisions()
-            end,
+        Callback = function(v)
+            State.SurfCollisions = v
+            updateAllCollisions()
+        end,
     }
 )
 
@@ -1986,66 +1518,45 @@ local TornadoShape =
 TornadoShape:AddSlider(
     "TornadoHeight",
     {
-        Title =
-            "Tornado Height",
-
+        Title = "Tornado Height",
         Min = 5,
         Max = 150,
-
-        Default =
-            State.TornadoHeight,
-
+        Default = State.TornadoHeight,
         Rounding = 0,
 
-        Callback =
-            function(value)
-                State.TornadoHeight =
-                    value
-            end,
+        Callback = function(v)
+            State.TornadoHeight = v
+        end,
     }
 )
 
 TornadoShape:AddSlider(
     "TornadoRadius",
     {
-        Title =
-            "Top Radius",
-
+        Title = "Top Radius",
         Min = 2,
         Max = 75,
-
-        Default =
-            State.TornadoRadius,
-
+        Default = State.TornadoRadius,
         Rounding = 1,
 
-        Callback =
-            function(value)
-                State.TornadoRadius =
-                    value
-            end,
+        Callback = function(v)
+            State.TornadoRadius = v
+        end,
     }
 )
 
 TornadoShape:AddSlider(
     "TornadoBaseRadius",
     {
-        Title =
-            "Base Radius",
-
+        Title = "Base Radius",
         Min = 0,
         Max = 30,
-
-        Default =
-            State.TornadoBaseRadius,
-
+        Default = State.TornadoBaseRadius,
         Rounding = 1,
 
-        Callback =
-            function(value)
-                State.TornadoBaseRadius =
-                    value
-            end,
+        Callback = function(v)
+            State.TornadoBaseRadius = v
+        end,
     }
 )
 
@@ -2058,105 +1569,72 @@ local TornadoMovement =
 TornadoMovement:AddSlider(
     "TornadoSpeed",
     {
-        Title =
-            "Rotation Speed",
-
+        Title = "Rotation Speed",
         Min = -15,
         Max = 15,
-
-        Default =
-            State.TornadoSpeed,
-
+        Default = State.TornadoSpeed,
         Rounding = 1,
 
-        Callback =
-            function(value)
-                State.TornadoSpeed =
-                    value
-            end,
+        Callback = function(v)
+            State.TornadoSpeed = v
+        end,
     }
 )
 
 TornadoMovement:AddSlider(
     "TornadoVerticalWave",
     {
-        Title =
-            "Vertical Turbulence",
-
+        Title = "Vertical Turbulence",
         Min = 0,
         Max = 15,
-
-        Default =
-            State.TornadoVerticalWave,
-
+        Default = State.TornadoVerticalWave,
         Rounding = 1,
 
-        Callback =
-            function(value)
-                State.TornadoVerticalWave =
-                    value
-            end,
+        Callback = function(v)
+            State.TornadoVerticalWave = v
+        end,
     }
 )
 
 TornadoMovement:AddSlider(
     "TornadoVerticalWaveSpeed",
     {
-        Title =
-            "Turbulence Speed",
-
+        Title = "Turbulence Speed",
         Min = 0,
         Max = 15,
-
-        Default =
-            State.TornadoVerticalWaveSpeed,
-
+        Default = State.TornadoVerticalWaveSpeed,
         Rounding = 1,
 
-        Callback =
-            function(value)
-                State.TornadoVerticalWaveSpeed =
-                    value
-            end,
+        Callback = function(v)
+            State.TornadoVerticalWaveSpeed = v
+        end,
     }
 )
 
 TornadoMovement:AddToggle(
     "TornadoSpinParts",
     {
-        Title =
-            "Spin Individual Parts",
+        Title = "Spin Individual Parts",
+        Default = State.TornadoSpinParts,
 
-        Default =
-            State.TornadoSpinParts,
-
-        Callback =
-            function(value)
-                State.TornadoSpinParts =
-                    value
-            end,
+        Callback = function(v)
+            State.TornadoSpinParts = v
+        end,
     }
 )
 
 TornadoMovement:AddSlider(
     "TornadoPartSpinSpeed",
     {
-        Title =
-            "Part Spin Speed",
-
+        Title = "Part Spin Speed",
         Min = 0,
         Max = 20,
-
-        Default =
-            State.TornadoPartSpinSpeed,
-
+        Default = State.TornadoPartSpinSpeed,
         Rounding = 1,
 
-        Callback =
-            function(value)
-                State.TornadoPartSpinSpeed =
-                    value
-            end,
+        Callback = function(v)
+            State.TornadoPartSpinSpeed = v
+        end,
     }
 )
 
@@ -2170,70 +1648,48 @@ TargetSection:AddInput(
     "TargetPlayer",
     {
         Title = "Player",
+        Placeholder = "Username or display name",
+        Default = LocalPlayer.Name,
 
-        Placeholder =
-            "Username or display name",
+        Callback = function(value)
+            local player =
+                findPlayer(value)
 
-        Default =
-            LocalPlayer.Name,
+            if player then
+                State.TargetPlayer =
+                    player
 
-        Callback =
-            function(value)
-                local player =
-                    findPlayer(
-                        value
-                    )
+                Fluent:Notify({
+                    Title = "Target Changed",
 
-                if player then
-                    State.TargetPlayer =
-                        player
+                    Content =
+                        player.DisplayName
+                        .. " (@"
+                        .. player.Name
+                        .. ")",
 
-                    Fluent:Notify({
-                        Title =
-                            "Target Changed",
-
-                        Content =
-                            player.DisplayName
-                            .. " (@"
-                            .. player.Name
-                            .. ")",
-
-                        Type =
-                            "Success",
-
-                        Duration =
-                            3,
-                    })
-                else
-                    Fluent:Notify({
-                        Title =
-                            "Player Not Found",
-
-                        Content =
-                            tostring(
-                                value
-                            ),
-
-                        Type =
-                            "Error",
-
-                        Duration =
-                            3,
-                    })
-                end
-            end,
+                    Type = "Success",
+                    Duration = 3,
+                })
+            else
+                Fluent:Notify({
+                    Title = "Player Not Found",
+                    Content = tostring(value),
+                    Type = "Error",
+                    Duration = 3,
+                })
+            end
+        end,
     }
 )
 
 TargetSection:AddButton({
-    Title =
-        "Target Yourself",
+    Title = "Target Yourself",
 
-    Callback =
-        function()
-            State.TargetPlayer =
-                LocalPlayer
-        end,
+    Callback = function()
+        State.TargetPlayer =
+            LocalPlayer
+    end,
 })
 
 local OffsetSection =
@@ -2256,62 +1712,44 @@ local function updateOffset()
         )
 end
 
-OffsetSection:AddSlider(
-    "OffsetX",
-    {
-        Title = "X",
-        Min = -50,
-        Max = 50,
-        Default = 0,
-        Rounding = 1,
+OffsetSection:AddSlider("OffsetX", {
+    Title = "X",
+    Min = -50,
+    Max = 50,
+    Default = 0,
+    Rounding = 1,
 
-        Callback =
-            function(value)
-                offsetX =
-                    value
+    Callback = function(v)
+        offsetX = v
+        updateOffset()
+    end,
+})
 
-                updateOffset()
-            end,
-    }
-)
+OffsetSection:AddSlider("OffsetY", {
+    Title = "Y",
+    Min = -50,
+    Max = 50,
+    Default = 0,
+    Rounding = 1,
 
-OffsetSection:AddSlider(
-    "OffsetY",
-    {
-        Title = "Y",
-        Min = -50,
-        Max = 50,
-        Default = 0,
-        Rounding = 1,
+    Callback = function(v)
+        offsetY = v
+        updateOffset()
+    end,
+})
 
-        Callback =
-            function(value)
-                offsetY =
-                    value
+OffsetSection:AddSlider("OffsetZ", {
+    Title = "Z",
+    Min = -50,
+    Max = 50,
+    Default = 0,
+    Rounding = 1,
 
-                updateOffset()
-            end,
-    }
-)
-
-OffsetSection:AddSlider(
-    "OffsetZ",
-    {
-        Title = "Z",
-        Min = -50,
-        Max = 50,
-        Default = 0,
-        Rounding = 1,
-
-        Callback =
-            function(value)
-                offsetZ =
-                    value
-
-                updateOffset()
-            end,
-    }
-)
+    Callback = function(v)
+        offsetZ = v
+        updateOffset()
+    end,
+})
 
 local FilterSection =
     Tabs.Filters:AddSection(
@@ -2322,108 +1760,86 @@ local FilterSection =
 FilterSection:AddSlider(
     "ScanRadius",
     {
-        Title =
-            "Scan Radius",
+        Title = "Scan Radius",
 
         Min = 25,
-        Max = 5000,
+        Max = 100000,
 
         Default =
             State.ScanRadius,
 
         Rounding = 0,
 
-        Callback =
-            function(value)
-                State.ScanRadius =
-                    value
-            end,
+        Callback = function(v)
+            State.ScanRadius = v
+        end,
     }
 )
 
 FilterSection:AddSlider(
     "MaxSize",
     {
-        Title =
-            "Maximum Part Size",
+        Title = "Maximum Part Size",
 
         Min = 1,
-        Max = 300,
+        Max = 1000,
 
         Default =
             State.MaxSize,
 
         Rounding = 0,
 
-        Callback =
-            function(value)
-                State.MaxSize =
-                    value
-            end,
+        Callback = function(v)
+            State.MaxSize = v
+        end,
     }
 )
 
 FilterSection:AddToggle(
     "IgnoreCharacters",
     {
-        Title =
-            "Ignore Characters",
-
+        Title = "Ignore Characters",
         Default = true,
 
-        Callback =
-            function(value)
-                State.IgnoreCharacters =
-                    value
-            end,
+        Callback = function(v)
+            State.IgnoreCharacters = v
+        end,
     }
 )
 
 FilterSection:AddToggle(
     "IgnoreTools",
     {
-        Title =
-            "Ignore Tools",
-
+        Title = "Ignore Tools",
         Default = true,
 
-        Callback =
-            function(value)
-                State.IgnoreTools =
-                    value
-            end,
+        Callback = function(v)
+            State.IgnoreTools = v
+        end,
     }
 )
 
 FilterSection:AddToggle(
     "IgnoreAccessories",
     {
-        Title =
-            "Ignore Accessories",
-
+        Title = "Ignore Accessories",
         Default = true,
 
-        Callback =
-            function(value)
-                State.IgnoreAccessories =
-                    value
-            end,
+        Callback = function(v)
+            State.IgnoreAccessories = v
+        end,
     }
 )
 
 FilterSection:AddToggle(
     "IgnoreHandles",
     {
-        Title =
-            "Ignore Handles",
-
+        Title = "Ignore Handles",
         Default = true,
 
-        Callback =
-            function(value)
-                State.IgnoreHandles =
-                    value
-            end,
+        Callback = function(v)
+            State.IgnoreHandles = v
+        end,
     }
 )
 
@@ -2433,57 +1849,33 @@ local GeneralSettings =
         "lucide/settings"
     )
 
-GeneralSettings:AddSlider(
-    "MaxParts",
-    {
-        Title =
-            "Maximum Parts",
-
-        Description =
-            "Maximum number of loose parts controlled at once. Rescan after changing.",
-
-        Min = 1,
-        Max = 1000,
-
-        Default =
-            State.MaxParts,
-
-        Rounding = 0,
-
-        Callback =
-            function(value)
-                State.MaxParts =
-                    value
-            end,
-    }
-)
+GeneralSettings:AddParagraph({
+    Title = "Part Limit",
+    Content =
+        "No part-count limit is enabled. Every valid loose part found by the scanner can be controlled.",
+})
 
 GeneralSettings:AddKeybind(
     "UIToggleKey",
     {
-        Title =
-            "UI Toggle",
+        Title = "UI Toggle",
 
         Description =
-            "Press this key to hide or show the interface.",
+            "Press this key to hide or show the UI.",
 
-        Default =
-            "K",
+        Default = "K",
+        Mode = "Always",
 
-        Mode =
-            "Always",
+        Callback = function()
+            State.UIVisible =
+                not State.UIVisible
 
-        Callback =
-            function()
-                State.UIVisible =
-                    not State.UIVisible
-
-                if State.UIVisible then
-                    Window:Show()
-                else
-                    Window:Hide()
-                end
-            end,
+            if State.UIVisible then
+                Window:Show()
+            else
+                Window:Hide()
+            end
+        end,
     }
 )
 
@@ -2496,27 +1888,20 @@ local PhysicsSection =
 PhysicsSection:AddToggle(
     "DisableCollision",
     {
-        Title =
-            "Disable Collision",
+        Title = "Disable Collision",
+        Default = State.DisableCollision,
 
-        Default =
-            State.DisableCollision,
-
-        Callback =
-            function(value)
-                State.DisableCollision =
-                    value
-
-                updateAllCollisions()
-            end,
+        Callback = function(v)
+            State.DisableCollision = v
+            updateAllCollisions()
+        end,
     }
 )
 
 PhysicsSection:AddSlider(
     "Responsiveness",
     {
-        Title =
-            "Responsiveness",
+        Title = "Responsiveness",
 
         Min = 10,
         Max = 200,
@@ -2526,129 +1911,90 @@ PhysicsSection:AddSlider(
 
         Rounding = 0,
 
-        Callback =
-            function(value)
-                State.Responsiveness =
+        Callback = function(value)
+            State.Responsiveness =
+                value
+
+            for _, data in pairs(
+                PartData
+            ) do
+                data.AlignPosition.Responsiveness =
                     value
 
-                for _, data
-                    in pairs(
-                        PartData
-                    )
-                do
-                    data.AlignPosition.Responsiveness =
-                        value
-
-                    data.AlignOrientation.Responsiveness =
-                        value
-                end
-            end,
+                data.AlignOrientation.Responsiveness =
+                    value
+            end
+        end,
     }
 )
 
 PhysicsSection:AddSlider(
     "PullSpeed",
     {
-        Title =
-            "Pull Speed",
-
+        Title = "Pull Speed",
         Min = 1,
         Max = 200,
-
-        Default =
-            State.PullSpeed,
-
+        Default = State.PullSpeed,
         Rounding = 0,
 
-        Callback =
-            function(value)
-                State.PullSpeed =
-                    value
-            end,
+        Callback = function(v)
+            State.PullSpeed = v
+        end,
     }
 )
 
 PhysicsSection:AddSlider(
     "SphereRadius",
     {
-        Title =
-            "Sphere Radius",
-
+        Title = "Sphere Radius",
         Min = 2,
         Max = 100,
-
-        Default =
-            State.SphereRadius,
-
+        Default = State.SphereRadius,
         Rounding = 0,
 
-        Callback =
-            function(value)
-                State.SphereRadius =
-                    value
-            end,
+        Callback = function(v)
+            State.SphereRadius = v
+        end,
     }
 )
 
 PhysicsSection:AddSlider(
     "SphereSpeed",
     {
-        Title =
-            "Sphere Speed",
-
+        Title = "Sphere Speed",
         Min = -15,
         Max = 15,
-
-        Default =
-            State.SphereSpeed,
-
+        Default = State.SphereSpeed,
         Rounding = 1,
 
-        Callback =
-            function(value)
-                State.SphereSpeed =
-                    value
-            end,
+        Callback = function(v)
+            State.SphereSpeed = v
+        end,
     }
 )
 
 PhysicsSection:AddSlider(
     "LineSpacing",
     {
-        Title =
-            "Line Spacing",
-
+        Title = "Line Spacing",
         Min = 1,
         Max = 20,
-
-        Default =
-            State.LineSpacing,
-
+        Default = State.LineSpacing,
         Rounding = 1,
 
-        Callback =
-            function(value)
-                State.LineSpacing =
-                    value
-            end,
+        Callback = function(v)
+            State.LineSpacing = v
+        end,
     }
 )
 
 Window:SelectTab(1)
 
 Fluent:Notify({
-    Title =
-        "Bring Parts",
-
-    Content =
-        "Loaded successfully.",
-
+    Title = "Bring Parts",
+    Content = "Loaded successfully.",
     SubContent =
-        "Press K to hide or show the UI.",
-
-    Type =
-        "Success",
-
-    Duration =
-        4,
+        "No part-count limit. Press K to hide or show the UI.",
+    Type = "Success",
+    Duration = 4,
 })
