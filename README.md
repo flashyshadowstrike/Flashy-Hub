@@ -1,5 +1,9 @@
 # Flashy Hub
 
+[![Reviewed on ScriptBlox](https://scriptblox.com/badge/Industrialist-OP-Script-Keyless-227159)](https://scriptblox.com/script/Industrialist-OP-Script-Keyless-227159)
+[![Reviewed on ScriptBlox](https://scriptblox.com/badge/Industrialist-OP-AI-Helper-Bot-%28KeylessOpenSource%29-229071)](https://scriptblox.com/script/Industrialist-OP-AI-Helper-Bot-%28KeylessOpenSource%29-229071)
+[![Reviewed on ScriptBlox](https://scriptblox.com/badge/Universal-Script-OP-Bring-Loose-Parts-%28Keyless-OpenSource%29-5+-Modes-230067)](https://scriptblox.com/script/Universal-Script-OP-Bring-Loose-Parts-%28Keyless-OpenSource%29-5+-Modes-230067)
+
 Flashy Hub is a Roblox script collection from Flashy Studios. The repository includes a game-aware loader, a full Industrialist toolkit, and standalone universal utilities.
 
 ## Scripts
@@ -126,6 +130,8 @@ Flashy-Hub/
 ## Support and Community
 
 Join the [Flashy Studios Discord](https://discord.gg/7SC5FDyJkn) for updates, support, previews, and community discussion.
+
+Find verified releases and the complete script catalog on the [Flashy Studios ScriptBlox profile](https://scriptblox.com/u/FlashyStudios).
 
 When reporting a problem, include:
 
