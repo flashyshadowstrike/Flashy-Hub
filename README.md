@@ -4,13 +4,14 @@
 [![Reviewed on ScriptBlox](https://scriptblox.com/badge/Industrialist-OP-AI-Helper-Bot-%28KeylessOpenSource%29-229071)](https://scriptblox.com/script/Industrialist-OP-AI-Helper-Bot-%28KeylessOpenSource%29-229071)
 [![Reviewed on ScriptBlox](https://scriptblox.com/badge/Universal-Script-OP-Bring-Loose-Parts-%28Keyless-OpenSource%29-5+-Modes-230067)](https://scriptblox.com/script/Universal-Script-OP-Bring-Loose-Parts-%28Keyless-OpenSource%29-5+-Modes-230067)
 
-Flashy Hub is a Roblox script collection from Flashy Studios. The repository includes a game-aware loader, a full Industrialist toolkit, and standalone universal utilities.
+Flashy Hub is a Roblox script collection from Flashy Studios. The repository includes a game-aware loader, an Industrialist toolkit, a Safari / Film Animals script, and standalone universal utilities.
 
 ## Scripts
 
 | Script | Type | Description |
 |---|---|---|
 | [Industrialist](https://github.com/flashyshadowstrike/Flashy-Hub/blob/main/Scripts/Industrialist.lua) | Game script | Blueprint tools, factory utilities, statistics, deletion tools, world states, mobile controls, and performance options for Industrialist. |
+| [Safari / Film Animals](https://github.com/flashyshadowstrike/Flashy-Hub/blob/main/Scripts/FilmAnimals.lua) | Game script | Wildlife tracking, filming assistance, vehicle and first-person fly, free camera, free mouse, route planning, and live trip statistics. |
 | [Bring Parts](https://github.com/flashyshadowstrike/Flashy-Hub/blob/main/UniversalScripts/BringParts.lua) | Universal | Controls loose physics parts with orbit, surf, tornado, targeting, filters, and configurable movement modes. |
 | [Industrialist AI Assistant](https://github.com/flashyshadowstrike/Flashy-Hub/blob/main/UniversalScripts/IndustrialistAI.lua) | Universal utility | AI-assisted Industrialist questions, factory calculations, chat triggers, activity monitoring, and player statistics. |
 
@@ -18,10 +19,23 @@ Flashy Hub is a Roblox script collection from Flashy Studios. The repository inc
 
 ### Game-aware loader
 
-The main loader detects the current supported game and loads its matching script. Industrialist is currently mapped to place ID `9312740628`.
+The main loader detects the current game using `game.GameId` (the universe ID) and loads its matching script.
+
+| Game | Universe ID | Script |
+| --- | --- | --- |
+| Industrialist | `3448264866` | `Scripts/Industrialist.lua` |
+| Safari / Film Animals | `10766395909` | `Scripts/FilmAnimals.lua` |
 
 ```lua
 loadstring(game:HttpGet("https://raw.githubusercontent.com/flashyshadowstrike/Flashy-Hub/main/Loader.lua"))()
+```
+
+### Safari / Film Animals
+
+Join the game and let it load, then run the main loader above or use this direct command:
+
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/flashyshadowstrike/Flashy-Hub/main/Scripts/FilmAnimals.lua"))()
 ```
 
 ### Bring Parts
@@ -81,6 +95,39 @@ The AI Assistant requires your own Groq API key before AI requests can work. Kee
 - Selection highlight limits and automatic cleanup
 - Anti-AFK and player utility controls
 
+## Safari / Film Animals Features
+
+- **Vehicle Fly** — Fly your vehicle while seated using the same movement controls as avatar flight.
+- **First-Person Fly** — Move through the air with camera-relative controls.
+- **Free Camera** — Explore without moving your character.
+- **Free Mouse** — Unlock your cursor while keeping flight controls available.
+- **Wildlife ESP** — Highlight loaded animals with names, states, mutations, and distances.
+- **Auto Recording** — Record when a visible wildlife target is in frame, with film-reserve and upload checks.
+- **Route Planner** — Show an eight-stop route through filtered wildlife.
+- **Live Trip Stats** — Track earnings, quota, remaining time, film, inventory, and the direction back to the bus.
+- **Custom Keybinds** — Choose your own shortcuts and save preferences.
+- **Visual Options** — Adjust lighting, distance fog, field of view, and camera effects.
+
+### Default controls
+
+| Key | Action |
+| --- | --- |
+| K | Open or minimize the menu |
+| F | Toggle fly; selects vehicle flight when seated in a detected vehicle |
+| N | Toggle free camera |
+| Right Alt | Free or lock the mouse |
+| T | Toggle animal tracking |
+| X | Select the next animal |
+| P | Stop movement and filming helpers |
+| WASD | Move while flying or using free camera |
+| Space / E | Ascend |
+| Ctrl / Q | Descend |
+| Shift | Speed boost |
+
+The script uses the same Fluent-style interface as Industrialist. Movement and filming helpers start disabled. Use the Wildlife tab to filter targets and the Filming tab to enable recording assistance. Flight and free-camera movement currently require a keyboard and mouse.
+
+Vehicle movement depends on the game's physics and client network ownership. Wildlife tracking shows objects currently loaded on your client.
+
 ## Bring Parts Features
 
 - Scan and control nearby loose physics parts
@@ -121,7 +168,8 @@ Feature availability depends on the environment being used. Missing optional API
 Flashy-Hub/
 |-- Loader.lua
 |-- Scripts/
-|   `-- Industrialist.lua
+|   |-- Industrialist.lua
+|   `-- FilmAnimals.lua
 `-- UniversalScripts/
     |-- BringParts.lua
     `-- IndustrialistAI.lua
@@ -145,11 +193,10 @@ Do not include API keys, account tokens, or other private information.
 
 ## Disclaimer
 
-This project is not affiliated with Roblox Corporation or the developers of Industrialist. Game updates can change remotes, models, interfaces, or behavior without notice. Use scripts responsibly and follow the rules that apply to the games and services you use.
+This project is not affiliated with Roblox Corporation or the developers of the supported games. Game updates can change remotes, models, interfaces, or behavior without notice. Use scripts responsibly and follow the rules that apply to the games and services you use.
 
 ## Credits
 
 Created and maintained by Flashy Studios.
 
-The Industrialist interface uses [Fluent Modded](https://github.com/StyearX/Fluent-modded).
-
+The Industrialist and Safari interfaces use [Fluent Modded](https://github.com/StyearX/Fluent-modded).
