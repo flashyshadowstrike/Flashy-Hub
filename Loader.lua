@@ -1,41 +1,41 @@
 --[[
-    ________           __             _____ __            ___           
+    ________           __             _____ __            ___
    / ____/ /___ ______/ /_  __  __   / ___// /___  ______/ (_)___  _____
   / /_  / / __ `/ ___/ __ \/ / / /   \__ \/ __/ / / / __  / / __ \/ ___/
- / __/ / / /_/ (__  ) / / / /_/ /   ___/ / /_/ /_/ / /_/ / / /_/ (__  )  
-/_/   /_/\__,_/____/_/ /_/\__, /   /____/\__/\__,_/\__,_/_/\____/____/  
-                         /____/                                         
+ / __/ / / /_/ (__  ) / / / /_/ /   ___/ / /_/ /_/ / /_/ / / /_/ (__  )
+/_/   /_/\__,_/____/_/ /_/\__, /   /____/\__/\__,_/\__,_/_/\____/____/
+                         /____/
 ]]
 
 local BASE_URL = "https://raw.githubusercontent.com/flashyshadowstrike/Flashy-Hub/main/Scripts/"
 
 local GAME_MAP = {
-    [9312740628] = "Industrialist.lua",
-    [79045113387460] = "FilmAnimals.lua",
+    [3448264866] = "Industrialist.lua",
+    [10766395909] = "FilmAnimals.lua",
 }
 
-local placeId = game.PlaceId
+local universeId = game.GameId
 
 local MarketplaceService = game:GetService("MarketplaceService")
 
 local okInfo, info = pcall(function()
-    return MarketplaceService:GetProductInfo(placeId)
+    return MarketplaceService:GetProductInfo(game.PlaceId)
 end)
 
 local gameName = (okInfo and info and info.Name) or "Unknown Game"
-local target = GAME_MAP[placeId]
+local target = GAME_MAP[universeId]
 
 if not target then
     warn("[Flashy Loader] Game not supported!")
     warn("Game: " .. gameName)
-    warn("PlaceId: " .. tostring(placeId))
+    warn("UniverseId: " .. tostring(universeId))
     return
 end
 
 print(string.format(
-    "[Flashy Loader] Detected: %s (PlaceId %d)",
+    "[Flashy Loader] Detected: %s (UniverseId %d)",
     gameName,
-    placeId
+    universeId
 ))
 
 print("[Flashy Loader] Loading: " .. target)
@@ -57,7 +57,7 @@ if not success then
     warn("================================")
     warn("[Flashy Loader] LOAD FAILED")
     warn("Game: " .. gameName)
-    warn("PlaceId: " .. tostring(placeId))
+    warn("UniverseId: " .. tostring(universeId))
     warn("Script: " .. target)
     warn("URL: " .. url)
     warn("Error: " .. tostring(result))
