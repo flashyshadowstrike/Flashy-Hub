@@ -11,7 +11,7 @@ local BASE_URL = "https://raw.githubusercontent.com/flashyshadowstrike/Flashy-Hu
 
 local GAME_MAP = {
     [9312740628] = "Industrialist.lua",
-    [10766395909] = "FilmAnimals.lua",
+    [137095720966003] = "FilmAnimals.lua",
 }
 
 local placeId = game.PlaceId
