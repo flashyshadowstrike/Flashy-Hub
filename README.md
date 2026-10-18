@@ -6,6 +6,8 @@
 
 Flashy Hub is a Roblox script collection from Flashy Studios. The repository includes a game-aware loader, an Industrialist toolkit, a Safari / Film Animals script, and standalone universal utilities.
 
+The published Industrialist toolkit is an obfuscated build. Its editable source is not included in this repository.
+
 ## Scripts
 
 | Script | Type | Description |
@@ -56,9 +58,13 @@ The AI Assistant requires your own Groq API key before AI requests can work. Kee
 
 ### Blueprint system
 
-- Copy builds with drag selection
+- Copy builds with desktop drag selection or mobile corner selection
+- Highlight every selected building and show complete normal-mode paste previews without count caps
 - Paste complete builds or one rounded quarter
 - Preserve building rotation and snap placement to the stud grid
+- Nudge placement with keyboard or mobile arrows relative to the character's current facing direction, snapped to the grid
+- Move selected builds by pasting the destination before deleting verified originals
+- Optional undo tracking for the last paste
 - Name exported blueprints and inspect names when importing
 - Display blueprint cost, item quantities, pipes, and wires
 - Import and export compact `IND-` blueprint codes
@@ -73,8 +79,20 @@ The AI Assistant requires your own Groq API key before AI requests can work. Kee
 - Pause and resume active pastes
 - Automatic recovery for temporary placement failures
 - Optional build verification
+- Cached connection checks with bounded retries for unresolved links and replication grace for late models or connectors
 - Optional adaptive pasting based on client FPS and server responsiveness
-- Optional low-lag white deployment screen with progress and estimated time remaining
+- Optional low-lag white deployment screen with progress, a dedicated live time-remaining estimate, pause controls, and finalizing status
+
+### Automatic pipe routing (BETA)
+
+- Select a machine output and destination input with clicks, taps, or the mobile crosshair picker
+- Direction-aware A* routing on a two-stud grid, with Shortest, Fewer Turns, and Avoid Replacements preferences
+- Shortest mode prioritizes modeled distance, includes endpoint connections, and widens its bounded search when an outside shortcut could improve the route
+- Automatically combine measured 2x2, 2x4, and 2x8 item or fluid pipes along compatible straight runs, including the long models' offset pivots
+- Place supported intersections and reconnect existing lines through separate channels
+- Check complete placement footprints and preserve existing connections during cancellation or recovery
+
+Same-type crossings require a wired calibration example. Unsupported crossings remain obstacles rather than being joined speculatively. Larger pipe templates must pass runtime geometry checks; incompatible sizes fall back to smaller supported pieces. Routing is still a beta feature, and automated tests do not establish live-game placement, throughput, or timing.
 
 ### Factory and world tools
 
@@ -91,8 +109,10 @@ The AI Assistant requires your own Groq API key before AI requests can work. Kee
 - Organized tabs and searchable controls
 - Desktop and mobile input support
 - Mobile placement toolbar and configurable interface sizing
-- Lightweight previews with adjustable detail
-- Selection highlight limits and automatic cleanup
+- Hold-to-nudge arrows, lock controls, and explicit mobile selection confirmation
+- Lightweight or full-model previews without normal-mode count limits
+- Optional selection-highlight cleanup and manual clearing
+- Reversible Potato Mode with reduced visuals and conservative request concurrency
 - Anti-AFK and player utility controls
 
 ## Safari / Film Animals Features
@@ -198,5 +218,7 @@ This project is not affiliated with Roblox Corporation or the developers of the 
 ## Credits
 
 Created and maintained by Flashy Studios.
+
+Industrialist obfuscation designer: FLAXO.
 
 The Industrialist and Safari interfaces use [Fluent Modded](https://github.com/StyearX/Fluent-modded).
