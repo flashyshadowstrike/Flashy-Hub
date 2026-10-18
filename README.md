@@ -3,6 +3,7 @@
 [![Reviewed on ScriptBlox](https://scriptblox.com/badge/Industrialist-OP-Script-Keyless-227159)](https://scriptblox.com/script/Industrialist-OP-Script-Keyless-227159)
 [![Reviewed on ScriptBlox](https://scriptblox.com/badge/Industrialist-OP-AI-Helper-Bot-%28KeylessOpenSource%29-229071)](https://scriptblox.com/script/Industrialist-OP-AI-Helper-Bot-%28KeylessOpenSource%29-229071)
 [![Reviewed on ScriptBlox](https://scriptblox.com/badge/Universal-Script-OP-Bring-Loose-Parts-%28Keyless-OpenSource%29-5+-Modes-230067)](https://scriptblox.com/script/Universal-Script-OP-Bring-Loose-Parts-%28Keyless-OpenSource%29-5+-Modes-230067)
+[![Reviewed on ScriptBlox](https://scriptblox.com/badge/Film-Animals-1-6-Player-Not-Really-OP-Script-But-Good-Enough-Keyless-232024)](https://scriptblox.com/script/Film-Animals-1-6-Player-Not-Really-OP-Script-But-Good-Enough-Keyless-232024)
 
 Flashy Hub is a Roblox script collection from Flashy Studios. The repository includes a game-aware loader, an Industrialist toolkit, a Safari / Film Animals script, and standalone universal utilities.
 
